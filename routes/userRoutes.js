@@ -27,6 +27,33 @@ router.post("/create", auth, async (req, res) => {
   }
 });
 
+// Update profile
+router.put("/update", auth, async (req, res) => {
+  const { userName, email, address } = req.body;
+
+  try {
+    const userId = req.user.id;
+    const profile = await UserProfile.findOne({ userId });
+
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    profile.userName = userName;
+    profile.email = email;
+    profile.address = address;
+
+    await profile.save();
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      profile,
+    });
+  } catch (e) {
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
 //profile get
 
 router.get("/me", auth, async (req, res) => {
