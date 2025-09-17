@@ -2,7 +2,8 @@ const express = require("express");
 require("dotenv").config();
 const cors = require("cors");
 const mongoose = require("mongoose");
-
+const authRouter = require("./routes/authRoutes");
+const userRouter = require("./routes/userRoutes");
 
 const MONGODB_URI = process.env.MONGO_URL;
 
@@ -25,6 +26,8 @@ app.use(
 
 const port = 4000;
 
+app.use("/auth", authRouter);
+app.use("/profile", userRouter);
 
 app.listen(port, async () => {
   console.log(`Port is running ${port}`);

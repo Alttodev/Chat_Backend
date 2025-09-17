@@ -1,0 +1,47 @@
+const express = require("express");
+const router = express.Router();
+const UserProfile = require("../models/userCreate");
+const auth = require("../middleware/auth");
+
+// profile create
+
+router.post("/create", auth, async (req, res) => {
+  const { userName, email, address } = req.body;
+
+  try {
+    const userId = req.user.id;
+    const existingProfile = await UserProfile.findOne({ userId });
+    if (existingProfile) {
+      return res.status(400).json({ message: "Profile already exists" });
+    }
+
+    const profile = new UserProfile({ userId, userName, email, address });
+    await profile.save();
+
+    res.status(201).json({
+      message: "Profile created successfully",
+      profile,
+    });
+  } catch (e) {
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+//profile get
+
+router.get("/me", auth, async (req, res) => {
+  try {
+    const profile = await UserProfile.findOne({ userId: req.user.id });
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    res.status(201).json({
+      message: "Profile verified successfully",
+      profile,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+module.exports = router;
