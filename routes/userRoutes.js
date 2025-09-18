@@ -59,14 +59,23 @@ router.put("/update", auth, async (req, res) => {
 router.get("/me", auth, async (req, res) => {
   try {
     const profile = await UserProfile.findOne({ userId: req.user.id });
+
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
-    res.status(201).json({
+
+    res.status(200).json({
       message: "Profile verified successfully",
-      profile,
+      profile: {
+        userName: profile.userName,
+        email: profile.email,
+        address: profile.address,
+        memberSince: profile.createdAt,
+        lastUpdated: profile.updatedAt,
+      },
     });
   } catch (err) {
+    console.error("Error fetching profile:", err.message);
     res.status(500).json({ message: "Server Error" });
   }
 });

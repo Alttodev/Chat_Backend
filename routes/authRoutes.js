@@ -88,6 +88,9 @@ router.post("/login", async (req, res) => {
     if (!isMatch)
       return res.status(400).json({ message: "Incorrect Password" });
 
+    user.lastLogin = new Date();
+    await user.save();
+
     const payload = { user: { id: user._id } };
 
     jwt.sign(
@@ -99,7 +102,12 @@ router.post("/login", async (req, res) => {
         res.status(201).json({
           message: "Login successful",
           token,
-          user: { _id: user._id, email: user.email },
+          user: {
+            _id: user._id,
+            email: user.email,
+            lastLogin: user.lastLogin,
+            changedPassword: user.lastPasswordChange,
+          },
         });
       }
     );
@@ -109,7 +117,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post('/requestPasswordReset', requestPasswordReset);
-router.post('/resetPassword/:id/:token', resetPassword);
+router.post("/requestPasswordReset", requestPasswordReset);
+router.post("/resetPassword/:id/:token", resetPassword);
 
 module.exports = router;

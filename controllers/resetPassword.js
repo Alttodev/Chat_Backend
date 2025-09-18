@@ -20,6 +20,8 @@ const resetPassword = async (req, res) => {
     const encryptedPassword = await bcrypt.hash(password, 10);
     user.password = encryptedPassword;
 
+    user.lastPasswordChange = Date.now();
+
     await user.save();
 
     res.status(200).json({ message: "Password has been reset successfully" });
