@@ -19,6 +19,7 @@ router.post("/create", auth, async (req, res) => {
     await profile.save();
 
     res.status(201).json({
+      success: true,
       message: "Profile created successfully",
       profile,
     });
@@ -46,6 +47,7 @@ router.put("/update", auth, async (req, res) => {
     await profile.save();
 
     res.status(200).json({
+      success: true,
       message: "Profile updated successfully",
       profile,
     });

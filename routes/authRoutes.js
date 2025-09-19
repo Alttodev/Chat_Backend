@@ -39,6 +39,7 @@ router.post("/signup", async (req, res) => {
           return res.status(500).send("Error generating token");
         }
         res.status(201).json({
+          success: true,
           message: "SignUp successfully",
           token,
           user: { _id: user._id, email: user.email },
@@ -100,6 +101,7 @@ router.post("/login", async (req, res) => {
       (err, token) => {
         if (err) return res.status(500).send("Error generating token");
         res.status(201).json({
+          success: true,
           message: "Login successful",
           token,
           user: {

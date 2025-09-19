@@ -17,6 +17,14 @@ const UserSchema = new mongoose.Schema({
   },
   address: String,
 
+  isOnline: {
+    type: Boolean,
+    default: false, 
+  },
+  lastSeen: {
+    type: Date,
+  },
+
   createdAt: {
     type: Date,
     default: Date.now,
