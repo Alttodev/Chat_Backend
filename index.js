@@ -4,6 +4,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const authRouter = require("./routes/authRoutes");
 const userRouter = require("./routes/userRoutes");
+const postRouter = require("./routes/postRoutes");
 const http = require("http");
 const { Server } = require("socket.io");
 const userSocket = require("./sockets/userSocket");
@@ -40,6 +41,7 @@ userSocket(io);
 // Routes
 app.use("/auth", authRouter);
 app.use("/profile", userRouter);
+app.use("/post", postRouter);
 
 const port = 4000;
 server.listen(port, async () => {

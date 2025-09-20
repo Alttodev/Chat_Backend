@@ -19,7 +19,7 @@ const UserSchema = new mongoose.Schema({
 
   isOnline: {
     type: Boolean,
-    default: false, 
+    default: false,
   },
   lastSeen: {
     type: Date,
