@@ -42,13 +42,20 @@ router.put("/update/:id", auth, async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    // Check if logged-in user is the owner
-    if (post.userId.toString() !== req.user.id) {
+    const user = await User.findOne({ userId: req.user.id });
+
+    if (!user) {
       return res
-        .status(403)
-        .json({ message: "Not authorized to update this post" });
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
+    if (post.user.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this post",
+      });
+    }
     post.postText = req.body.postText || post.postText;
     await post.save();
 
@@ -66,21 +73,34 @@ router.delete("/delete/:id", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
 
     if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
     }
 
-    if (post.userId.toString() !== req.user.id) {
+    // Get the user document from DB
+    const user = await User.findOne({ userId: req.user.id });
+
+    if (!user) {
       return res
-        .status(403)
-        .json({ success: true, message: "Not authorized to delete this post" });
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    if (post.user.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this post",
+      });
     }
 
     await post.deleteOne();
 
-    res.json({ message: "Post deleted successfully" });
+    res
+      .status(201)
+      .json({ success: true, message: "Post deleted successfully" });
   } catch (err) {
-    console.error("Error deleting post:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -90,12 +110,14 @@ router.get("/list", auth, async (req, res) => {
     const posts = await Post.find()
       .populate("user", "userName")
       .sort({ createdAt: -1 });
+    const user = await User.findOne({ userId: req.user.id });
 
     const postsWithLikedByMe = posts.map((post) => ({
       ...post.toObject(),
       likedByMe: post.likedBy.some(
         (userId) => userId.toString() === req.user.id
       ),
+      isOwner: post.user && post.user._id.toString() === user._id.toString(),
     }));
 
     res.status(200).json({
@@ -106,6 +128,35 @@ router.get("/list", auth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+//info
+router.get("/info/:id", async (req, res) => {
+  try {
+    const postId = req.params.id;
+
+    const post = await Post.findById(postId)
+      .populate("user", "userName")
+      .exec();
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Post fetched successfully",
+      post,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
