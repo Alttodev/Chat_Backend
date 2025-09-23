@@ -193,4 +193,72 @@ router.post("/:id/like", auth, async (req, res) => {
   }
 });
 
+//comment
+
+router.post("/:id/comment", auth, async (req, res) => {
+  try {
+    const { comment } = req.body;
+
+    if (!comment || comment.trim() === "") {
+      return res.status(400).json({ message: "Comment text is required" });
+    }
+
+    const post = await Post.findById(req.params.id).populate(
+      "user",
+      "userName"
+    );
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    const user = await User.findOne({ userId: req.user.id });
+    const newComment = {
+      user: user._id,
+      post,
+      comment,
+    };
+
+    post.comments.push(newComment);
+    await post.save();
+
+    const populatedPost = await Post.findById(req.params.id).populate(
+      "comments.user",
+      "userName"
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Comment added successfully",
+      comments: populatedPost.comments,
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+//comment list
+
+router.get("/:id/comments", async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id)
+      .populate("comments.user", "userName  email")
+      .select("comments");
+
+    if (!post) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Comments fetched successfully",
+      comments: post.comments,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
+
 module.exports = router;
