@@ -242,7 +242,7 @@ router.post("/:id/comment", auth, async (req, res) => {
 router.get("/:id/comments", async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
-      .populate("comments.user", "userName  email")
+      .populate("comments.user", "userName")
       .select("comments");
 
     if (!post) {
