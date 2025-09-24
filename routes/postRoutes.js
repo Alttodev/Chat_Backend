@@ -239,7 +239,7 @@ router.post("/:id/comment", auth, async (req, res) => {
 
 //comment list
 
-router.get("/:id/comments", async (req, res) => {
+router.get("/:id/comments", auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
       .populate("comments.user", "userName")
@@ -251,13 +251,61 @@ router.get("/:id/comments", async (req, res) => {
         .json({ success: false, message: "Post not found" });
     }
 
+    const user = await User.findOne({ userId: req.user.id });
+
+    const commentsWithEditable = post.comments.map((comment) => ({
+      _id: comment._id,
+      comment: comment.comment,
+      user: comment.user,
+      createdAt: comment.createdAt,
+      editable: comment.user._id.toString() === user._id.toString(),
+    }));
+
     res.status(200).json({
       success: true,
       message: "Comments fetched successfully",
+      comments: commentsWithEditable,
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
+
+//delete comment
+router.delete("/:postId/comment/:commentId", auth, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
+    }
+
+    // find the comment
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Comment not found" });
+    }
+
+  
+
+    // remove comment
+    comment.deleteOne();
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Comment deleted successfully",
       comments: post.comments,
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server Error" });
+    console.error(err.message);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
