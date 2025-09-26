@@ -3,9 +3,10 @@ const router = express.Router();
 const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
+const upload = require("../middleware/upload");
 
 // Create Post
-router.post("/create", auth, async (req, res) => {
+router.post("/create", auth, upload.single("image"), async (req, res) => {
   try {
     const { postText } = req.body;
 
@@ -18,6 +19,7 @@ router.post("/create", auth, async (req, res) => {
     const post = new Post({
       postText,
       user: user._id,
+      image: req.file ? `/uploads/${req.file.filename}` : null,
     });
 
     await post.save();
@@ -43,7 +45,6 @@ router.put("/update/:id", auth, async (req, res) => {
     }
 
     const user = await User.findOne({ userId: req.user.id });
-
     if (!user) {
       return res
         .status(404)
@@ -53,13 +54,20 @@ router.put("/update/:id", auth, async (req, res) => {
     if (post.user.toString() !== user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to delete this post",
+        message: "Not authorized to update this post",
       });
     }
+
+    // update post text
     post.postText = req.body.postText || post.postText;
+
     await post.save();
 
-    res.json({ success: true, message: "Post updated successfully", post });
+    res.json({
+      success: true,
+      message: "Post updated successfully",
+      post,
+    });
   } catch (err) {
     console.error("Error updating post:", err);
     res.status(500).json({ message: "Server error" });
@@ -108,25 +116,35 @@ router.delete("/delete/:id", auth, async (req, res) => {
 router.get("/list", auth, async (req, res) => {
   try {
     const posts = await Post.find()
-      .populate("user", "userName")
+      .populate("user", "userName email")
       .sort({ createdAt: -1 });
-    const user = await User.findOne({ userId: req.user.id });
 
-    const postsWithLikedByMe = posts.map((post) => ({
-      ...post.toObject(),
-      likedByMe: post.likedBy.some(
-        (userId) => userId.toString() === req.user.id
-      ),
-      isOwner: post.user && post.user._id.toString() === user._id.toString(),
-    }));
+    const currentUser = await User.findOne({ userId: req.user.id });
+
+    if (!currentUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const postsWithExtra = posts.map((post) => {
+      return {
+        ...post.toObject(),
+        likedByMe: post.likedBy.some(
+          (userId) => userId.toString() === req.user.id
+        ),
+        isOwner:
+          post.user && post.user._id.toString() === currentUser._id.toString(),
+      };
+    });
 
     res.status(200).json({
       success: true,
       message: "Posts fetched successfully",
-      posts: postsWithLikedByMe,
+      posts: postsWithExtra,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching posts:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });

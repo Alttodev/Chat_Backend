@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const authRouter = require("./routes/authRoutes");
 const userRouter = require("./routes/userRoutes");
 const postRouter = require("./routes/postRoutes");
+const path = require("path");
 const commentRouter = require("./routes/commentRoutes");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -28,6 +29,7 @@ const server = http.createServer(app);
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const io = new Server(server, {
   cors: {
