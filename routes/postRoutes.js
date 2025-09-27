@@ -115,9 +115,17 @@ router.delete("/delete/:id", auth, async (req, res) => {
 //list post
 router.get("/list", auth, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1; 
+    const limit = parseInt(req.query.limit) || 5; 
+    const skip = (page - 1) * limit;
+
+    const totalPosts = await Post.countDocuments();
+
     const posts = await Post.find()
       .populate("user", "userName email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     const currentUser = await User.findOne({ userId: req.user.id });
 
@@ -142,9 +150,10 @@ router.get("/list", auth, async (req, res) => {
       success: true,
       message: "Posts fetched successfully",
       posts: postsWithExtra,
+      nextPage: page + 1,
+      totalPages: Math.ceil(totalPosts / limit),
     });
   } catch (err) {
-    console.error("Error fetching posts:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
