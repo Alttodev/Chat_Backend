@@ -77,7 +77,34 @@ router.get("/me", auth, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Error fetching profile:", err.message);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+// all profiles get
+router.get("/userProfiles", auth, async (req, res) => {
+  try {
+    const profiles = await UserProfile.find({ userId: { $ne: req.user.id } });
+
+    if (!profiles || profiles.length === 0) {
+      return res.status(404).json({ message: "No profiles found" });
+    }
+
+    const formattedProfiles = profiles.map((profile) => ({
+      userName: profile.userName,
+      isOnline: profile.isOnline,
+      email: profile.email,
+      address: profile.address,
+      memberSince: profile.createdAt,
+      lastUpdated: profile.updatedAt,
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "Users listed successfully",
+      profiles: formattedProfiles,
+    });
+  } catch (err) {
     res.status(500).json({ message: "Server Error" });
   }
 });
