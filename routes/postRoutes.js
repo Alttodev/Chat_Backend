@@ -158,6 +158,59 @@ router.get("/list", auth, async (req, res) => {
   }
 });
 
+router.get("/list/:id", auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const skip = (page - 1) * limit;
+
+    const userId = req.params.id;
+
+    const totalPosts = await Post.countDocuments({ user: userId });
+
+    const posts = await Post.find({ user: userId })
+      .populate("user", "userName email address isOnline")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+
+    if (!currentUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const postsWithExtra = posts.map((post) => {
+      const { user, ...rest } = post.toObject();
+      return {
+        ...rest,
+        likedByMe: post.likedBy.some(
+          (likedUserId) => likedUserId.toString() === req.user.id
+        ),
+        isOwner: user?._id.toString() === currentUser._id.toString(),
+      };
+    });
+
+    const user = posts[0]?.user || null;
+
+    res.status(200).json({
+      success: true,
+      message: "User's posts fetched successfully",
+      user,
+      currentUser: {
+        userName: currentUser.userName,
+      },
+      posts: postsWithExtra,
+      nextPage: page + 1,
+      totalPages: Math.ceil(totalPosts / limit),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 //info
 router.get("/info/:id", async (req, res) => {
   try {
