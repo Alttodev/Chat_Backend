@@ -203,6 +203,7 @@ router.get("/list/:id", auth, async (req, res) => {
         userName: currentUser.userName,
       },
       posts: postsWithExtra,
+      totalPosts: totalPosts,
       nextPage: page + 1,
       totalPages: Math.ceil(totalPosts / limit),
     });
