@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const authRouter = require("./routes/authRoutes");
 const userRouter = require("./routes/userRoutes");
 const postRouter = require("./routes/postRoutes");
+const followRouter = require("./routes/followRoutes");
 const path = require("path");
 const commentRouter = require("./routes/commentRoutes");
 const http = require("http");
@@ -46,6 +47,7 @@ app.use("/auth", authRouter);
 app.use("/profile", userRouter);
 app.use("/post", postRouter);
 app.use("/posts", commentRouter);
+app.use("/follow", followRouter(io));
 
 const port = 4000;
 server.listen(port, async () => {
