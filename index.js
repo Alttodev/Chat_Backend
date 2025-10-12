@@ -49,6 +49,7 @@ app.use("/post", postRouter);
 app.use("/posts", commentRouter);
 app.use("/follow", followRouter(io));
 
+
 const port = 4000;
 server.listen(port, async () => {
   console.log(` Server running on http://localhost:${port}`);

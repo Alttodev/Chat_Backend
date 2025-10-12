@@ -9,6 +9,14 @@ const followRequestSchema = new mongoose.Schema(
       enum: ["pending", "accepted", "declined"],
       default: "pending",
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    isFriends: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
