@@ -210,5 +210,44 @@ module.exports = (io) => {
     }
   });
 
+  router.get("/counts/:id", auth, async (req, res) => {
+    try {
+      const user = await User.findById(req.params.id);
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      const friends = await FollowRequest.find({ to: user._id })
+        .populate("from", "userName email address isOnline")
+        .populate("to", "userName email address isOnline")
+        .sort({ createdAt: -1 });
+
+      // --- counts ---
+      const totalFriends = friends.filter(
+        (f) => f.status === "accepted"
+      ).length;
+      const totalRequests = friends.filter(
+        (f) => f.status === "pending"
+      ).length;
+      const totalOnline = friends.filter(
+        (f) => f.status === "accepted" && f.from.isOnline === true
+      ).length;
+
+      res.json({
+        success: true,
+        message: "Count Listed Successfully",
+        totalFriends,
+        totalRequests,
+        totalOnline,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
+
   return router;
 };
