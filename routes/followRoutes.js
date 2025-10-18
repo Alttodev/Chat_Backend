@@ -140,7 +140,6 @@ module.exports = (io) => {
 
       res.json({ success: true, request });
     } catch (err) {
-      console.error(err);
       res.status(500).json({ success: false, message: "Server error" });
     }
   });
