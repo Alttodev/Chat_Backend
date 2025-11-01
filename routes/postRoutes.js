@@ -182,6 +182,8 @@ router.get("/list/:id", auth, async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
+    const userDetails = await User.findOne({ _id: userId });
+
     const postsWithExtra = posts.map((post) => {
       const { user, ...rest } = post.toObject();
       return {
@@ -194,11 +196,11 @@ router.get("/list/:id", auth, async (req, res) => {
     });
 
     const user = posts[0]?.user || null;
-
+    const userDetail = user ? user : userDetails;
     res.status(200).json({
       success: true,
       message: "User's posts fetched successfully",
-      user,
+      userDetail,
       currentUser: {
         userName: currentUser.userName,
       },
