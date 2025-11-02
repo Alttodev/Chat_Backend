@@ -170,6 +170,35 @@ module.exports = (io) => {
     }
   });
 
+  router.get("/friends/:id", auth, async (req, res) => {
+    const id = req.params.id;
+    try {
+      const user = await User.findOne({ _id: id });
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      const friends = await FollowRequest.find({ to: user._id })
+        .populate("from", "userName email address isOnline")
+        .populate("to", "userName email address isOnline")
+        .sort({ createdAt: -1 });
+
+      const totalFollowers = friends.filter((f) => f.status === "accepted");
+      console.log("Total Followers:", totalFollowers);
+
+      res.json({
+        success: true,
+        totalFollowers,
+        message: "Friends Listed Successfully",
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
+
   router.get("/counts", auth, async (req, res) => {
     try {
       const user = await User.findOne({ userId: req.user.id });
