@@ -187,7 +187,6 @@ module.exports = (io) => {
         .sort({ createdAt: -1 });
 
       const totalFollowers = friends.filter((f) => f.status === "accepted");
-      console.log("Total Followers:", totalFollowers);
 
       res.json({
         success: true,
