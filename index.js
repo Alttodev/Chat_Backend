@@ -11,6 +11,9 @@ const commentRouter = require("./routes/commentRoutes");
 const http = require("http");
 const { Server } = require("socket.io");
 const userSocket = require("./sockets/userSocket");
+const chatRouter = require("./routes/chatRoutes");
+const notificationRouter = require("./routes/notificationRoutes");
+const zegoRouter = require("./routes/zegoRoutes");
 
 const MONGODB_URI = process.env.MONGO_URL;
 
@@ -48,6 +51,9 @@ app.use("/profile", userRouter);
 app.use("/post", postRouter);
 app.use("/posts", commentRouter);
 app.use("/follow", followRouter(io));
+app.use("/chat", chatRouter(io));
+app.use("/notifications", notificationRouter);
+app.use("/zego", zegoRouter);
 
 
 const port = 4000;

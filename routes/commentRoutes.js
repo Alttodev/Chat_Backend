@@ -37,10 +37,14 @@ router.post("/:id/comment", auth, async (req, res) => {
       "userName"
     );
 
+    const sortedComments = [...populatedPost.comments].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
     res.status(201).json({
       success: true,
       message: "Comment added successfully",
-      comments: populatedPost.comments,
+      comments: sortedComments,
     });
   } catch (err) {
     console.error(err.message);
@@ -64,7 +68,11 @@ router.get("/:id/comments", auth, async (req, res) => {
 
     const user = await User.findOne({ userId: req.user.id });
 
-    const commentsWithEditable = post.comments.map((comment) => ({
+    const sortedComments = [...post.comments].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    const commentsWithEditable = sortedComments.map((comment) => ({
       _id: comment._id,
       comment: comment.comment,
       user: comment.user,

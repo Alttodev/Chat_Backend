@@ -144,6 +144,28 @@ module.exports = (io) => {
     }
   });
 
+   router.delete("/delete/requests/:fromId/:toId", auth, async (req, res) => {
+    try {
+      const { fromId, toId } = req.params;
+
+      const request = await FollowRequest.findOne({ from: fromId, to: toId });
+
+      if (!request) {
+        return res
+          .status(404)
+          .json({ success: false, message: "No request found between users" });
+      }
+
+      await request.deleteOne();
+
+      res
+        .status(201)
+        .json({ success: true, message: "Unfollowed successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
+
   router.get("/friends", auth, async (req, res) => {
     try {
       const user = await User.findOne({ userId: req.user.id });

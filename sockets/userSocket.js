@@ -1,40 +1,136 @@
 const User = require("../models/userCreate");
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+
+const extractToken = (socket) => {
+  const authToken = socket.handshake?.auth?.token;
+  if (authToken && typeof authToken === "string") {
+    return authToken.startsWith("Bearer ")
+      ? authToken.split(" ")[1].trim()
+      : authToken.trim();
+  }
+
+  const headerToken = socket.handshake?.headers?.authorization;
+  if (headerToken && typeof headerToken === "string") {
+    return headerToken.startsWith("Bearer ")
+      ? headerToken.split(" ")[1].trim()
+      : headerToken.trim();
+  }
+
+  return null;
+};
+
+const extractLegacyAuthUserId = (socket) => {
+  const authUserId = socket.handshake?.auth?.userId;
+  if (authUserId && typeof authUserId === "string") {
+    return authUserId.trim();
+  }
+
+  const queryUserId = socket.handshake?.query?.userId;
+  if (queryUserId && typeof queryUserId === "string") {
+    return queryUserId.trim();
+  }
+
+  return null;
+};
 
 const userSocket = (io) => {
   io.on("connection", async (socket) => {
-    const { userId } = socket.handshake.query;
-    if (!userId) {
-      console.log("No userId provided");
+    let authUserId = null;
+    const token = extractToken(socket);
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        authUserId = decoded?.user?.id;
+        if (!authUserId) {
+          throw new Error("Invalid token payload");
+        }
+      } catch (err) {
+        console.log("Invalid socket token");
+        socket.emit("socket-error", { message: "Invalid token" });
+        socket.disconnect(true);
+        return;
+      }
+    } else {
+      authUserId = extractLegacyAuthUserId(socket);
+      if (!authUserId) {
+        console.log("No socket token or userId provided");
+        socket.emit("socket-error", {
+          message: "Unauthorized socket connection",
+        });
+        socket.disconnect(true);
+        return;
+      }
+      console.log("Socket connected with legacy userId handshake");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(authUserId)) {
+      socket.emit("socket-error", { message: "Invalid user id" });
+      socket.disconnect(true);
       return;
     }
 
+    let user = null;
     try {
-      const user = await User.findOneAndUpdate(
-        { userId },
+      user = await User.findOneAndUpdate(
+        { userId: authUserId },
         { isOnline: true },
         { new: true }
       );
       if (user) {
         console.log("User set online:", user.userName);
       } else {
-        console.log("User not found for userId:", userId);
+        console.log("User not found for auth user id:", authUserId);
       }
     } catch (err) {
       console.error("Error updating user online status:", err);
     }
 
-    socket.join(userId);
-    io.emit("user-online", userId);
+    const authUserRoom = authUserId.toString();
+
+    socket.join(authUserRoom);
+    if (user?._id) {
+      socket.join(user._id.toString());
+    }
+    const activeAuthRoom = io.sockets.adapter.rooms.get(authUserRoom);
+    if (activeAuthRoom && activeAuthRoom.size === 1) {
+      io.emit("user-online", authUserRoom);
+    }
 
     socket.on("check-user-status", async (id) => {
       const online = io.sockets.adapter.rooms.has(id) ? true : false;
       socket.emit("user-status", { id, online });
     });
 
+    socket.on("chat:typing", async ({ toUserAuthId, conversationId }) => {
+      if (!toUserAuthId) return;
+      io.to(toUserAuthId).emit("chat:typing", {
+        fromUserAuthId: authUserId.toString(),
+        conversationId,
+      });
+    });
+
+    socket.on("chat:stop-typing", async ({ toUserAuthId, conversationId }) => {
+      if (!toUserAuthId) return;
+      io.to(toUserAuthId).emit("chat:stop-typing", {
+        fromUserAuthId: authUserId.toString(),
+        conversationId,
+      });
+    });
+
     socket.on("disconnect", async () => {
+      const activeRoomAfterDisconnect = io.sockets.adapter.rooms.get(authUserRoom);
+      const hasOtherActiveConnections =
+        !!activeRoomAfterDisconnect && activeRoomAfterDisconnect.size > 0;
+
+      if (hasOtherActiveConnections) {
+        return;
+      }
+
       try {
         const user = await User.findOneAndUpdate(
-          { userId },
+          { userId: authUserId },
           { isOnline: false, lastSeen: new Date() },
           { new: true }
         );
@@ -45,7 +141,7 @@ const userSocket = (io) => {
         console.error("Error updating lastSeen on disconnect:", err);
       }
 
-      io.emit("user-offline", userId);
+      io.emit("user-offline", authUserRoom);
     });
   });
 };
