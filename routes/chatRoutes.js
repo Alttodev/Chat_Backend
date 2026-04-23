@@ -6,6 +6,7 @@ const User = require("../models/userCreate");
 const Conversation = require("../models/conversation");
 const ChatMessage = require("../models/chatMessage");
 const ChatBlock = require("../models/chatBlock");
+const FollowRequest = require("../models/followRequest");
 
 module.exports = (io) => {
   const router = express.Router();
@@ -49,6 +50,24 @@ module.exports = (io) => {
     return !!block;
   };
 
+  const areUsersMutualFollowers = async (userAId, userBId) => {
+    const followA = await FollowRequest.findOne({
+      from: userAId,
+      to: userBId,
+      status: "accepted",
+      isFriends: true,
+    }).lean();
+
+    const followB = await FollowRequest.findOne({
+      from: userBId,
+      to: userAId,
+      status: "accepted",
+      isFriends: true,
+    }).lean();
+
+    return !!followA && !!followB;
+  };
+
   router.post(
     "/conversations/:targetUserId/messages",
     auth,
@@ -87,15 +106,30 @@ module.exports = (io) => {
           });
         }
 
-      const blocked = await isBlockedBetween(currentUser._id, targetUser._id);
-      if (blocked) {
-        return res.status(403).json({
-          success: false,
-          message: "Message failed to send. One of you has blocked the other.",
-        });
-      }
+        const blocked = await isBlockedBetween(currentUser._id, targetUser._id);
+        if (blocked) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Message failed to send. One of you has blocked the other.",
+          });
+        }
 
-        let conversation = await getConversation(currentUser._id, targetUser._id);
+        const areMutualFollowers = await areUsersMutualFollowers(
+          currentUser._id,
+          targetUser._id,
+        );
+        if (!areMutualFollowers) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only chat with users you both follow.",
+          });
+        }
+
+        let conversation = await getConversation(
+          currentUser._id,
+          targetUser._id,
+        );
 
         if (!conversation) {
           conversation = await Conversation.create({
@@ -146,7 +180,7 @@ module.exports = (io) => {
         console.error(err);
         res.status(500).json({ success: false, message: "Server error" });
       }
-    }
+    },
   );
 
   router.get("/conversations", auth, async (req, res) => {
@@ -170,8 +204,8 @@ module.exports = (io) => {
         .map((conversation) =>
           conversation.participants.find(
             (participant) =>
-              participant?._id?.toString() !== currentUser._id.toString()
-          )
+              participant?._id?.toString() !== currentUser._id.toString(),
+          ),
         )
         .filter((participant) => !!participant?._id)
         .map((participant) => participant._id);
@@ -222,7 +256,7 @@ module.exports = (io) => {
 
           const otherParticipant = conversation.participants.find(
             (participant) =>
-              participant?._id?.toString() !== currentUser._id.toString()
+              participant?._id?.toString() !== currentUser._id.toString(),
           );
 
           const otherParticipantId = otherParticipant?._id?.toString();
@@ -241,7 +275,7 @@ module.exports = (io) => {
             isBlocked: blockStatus.blockedByMe || blockStatus.blockedMe,
             unreadCount,
           };
-        })
+        }),
       );
 
       res.status(200).json({
@@ -255,97 +289,104 @@ module.exports = (io) => {
     }
   });
 
-  router.get("/conversations/:conversationId/messages", auth, async (req, res) => {
-    try {
-      const { conversationId } = req.params;
-      const page = parseInt(req.query.page, 10) || 1;
-      const limit = parseInt(req.query.limit, 10) || 30;
-      const skip = (page - 1) * limit;
+  router.get(
+    "/conversations/:conversationId/messages",
+    auth,
+    async (req, res) => {
+      try {
+        const { conversationId } = req.params;
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 30;
+        const skip = (page - 1) * limit;
 
-      const currentUser = await getCurrentUser(req.user.id);
-      if (!currentUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
-      }
-
-      const conversation = await Conversation.findById(conversationId).lean();
-      if (!conversation) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Conversation not found" });
-      }
-
-      const isParticipant = conversation.participants.some(
-        (participantId) => participantId.toString() === currentUser._id.toString()
-      );
-
-      if (!isParticipant) {
-        return res
-          .status(403)
-          .json({ success: false, message: "Not authorized" });
-      }
-
-      const totalMessages = await ChatMessage.countDocuments({
-        conversation: conversationId,
-      });
-
-      const messages = await ChatMessage.find({ conversation: conversationId })
-        .populate("sender", "userName email isOnline")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean();
-
-      const orderedMessages = [...messages].reverse();
-
-      await ChatMessage.updateMany(
-        {
-          conversation: conversationId,
-          sender: { $ne: currentUser._id },
-          seenBy: { $ne: currentUser._id },
-        },
-        {
-          $addToSet: { seenBy: currentUser._id },
+        const currentUser = await getCurrentUser(req.user.id);
+        if (!currentUser) {
+          return res
+            .status(404)
+            .json({ success: false, message: "User not found" });
         }
-      );
 
-      const participantIds = conversation.participants
-        .map((participantId) => participantId.toString())
-        .filter((id) => id !== currentUser._id.toString());
+        const conversation = await Conversation.findById(conversationId).lean();
+        if (!conversation) {
+          return res
+            .status(404)
+            .json({ success: false, message: "Conversation not found" });
+        }
 
-      participantIds.forEach((participantId) => {
-        User.findById(participantId)
-          .then((participant) => {
-            if (participant) {
-              io.to(participant.userId.toString()).emit("chat:message:seen", {
-                conversationId,
-                seenBy: currentUser._id,
-                seenAt: new Date(),
-              });
-            }
-          })
-          .catch(() => {});
-      });
+        const isParticipant = conversation.participants.some(
+          (participantId) =>
+            participantId.toString() === currentUser._id.toString(),
+        );
 
-      res.status(200).json({
-        success: true,
-        message: "Messages fetched successfully",
-        messages: orderedMessages,
-        nextPage: page + 1,
-        totalPages: Math.ceil(totalMessages / limit),
-      });
-    } catch (err) {
-      if (err?.code === 11000) {
-        return res.status(200).json({
-          success: true,
-          message: "User is already blocked",
+        if (!isParticipant) {
+          return res
+            .status(403)
+            .json({ success: false, message: "Not authorized" });
+        }
+
+        const totalMessages = await ChatMessage.countDocuments({
+          conversation: conversationId,
         });
+
+        const messages = await ChatMessage.find({
+          conversation: conversationId,
+        })
+          .populate("sender", "userName email isOnline")
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+        const orderedMessages = [...messages].reverse();
+
+        await ChatMessage.updateMany(
+          {
+            conversation: conversationId,
+            sender: { $ne: currentUser._id },
+            seenBy: { $ne: currentUser._id },
+          },
+          {
+            $addToSet: { seenBy: currentUser._id },
+          },
+        );
+
+        const participantIds = conversation.participants
+          .map((participantId) => participantId.toString())
+          .filter((id) => id !== currentUser._id.toString());
+
+        participantIds.forEach((participantId) => {
+          User.findById(participantId)
+            .then((participant) => {
+              if (participant) {
+                io.to(participant.userId.toString()).emit("chat:message:seen", {
+                  conversationId,
+                  seenBy: currentUser._id,
+                  seenAt: new Date(),
+                });
+              }
+            })
+            .catch(() => {});
+        });
+
+        res.status(200).json({
+          success: true,
+          message: "Messages fetched successfully",
+          messages: orderedMessages,
+          nextPage: page + 1,
+          totalPages: Math.ceil(totalMessages / limit),
+        });
+      } catch (err) {
+        if (err?.code === 11000) {
+          return res.status(200).json({
+            success: true,
+            message: "User is already blocked",
+          });
+        }
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
       }
-      console.error(err);
-      res.status(500).json({ success: false, message: "Server error" });
-    }
-  });
+    },
+  );
 
   router.put("/conversations/:conversationId/seen", auth, async (req, res) => {
     try {
@@ -366,7 +407,8 @@ module.exports = (io) => {
       }
 
       const isParticipant = conversation.participants.some(
-        (participantId) => participantId.toString() === currentUser._id.toString()
+        (participantId) =>
+          participantId.toString() === currentUser._id.toString(),
       );
 
       if (!isParticipant) {
@@ -383,11 +425,12 @@ module.exports = (io) => {
         },
         {
           $addToSet: { seenBy: currentUser._id },
-        }
+        },
       );
 
       const otherParticipants = conversation.participants.filter(
-        (participantId) => participantId.toString() !== currentUser._id.toString()
+        (participantId) =>
+          participantId.toString() !== currentUser._id.toString(),
       );
 
       const users = await User.find({ _id: { $in: otherParticipants } });
