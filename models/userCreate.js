@@ -25,6 +25,21 @@ const UserSchema = new mongoose.Schema({
     type: Date,
   },
 
+  pushNotification: {
+    enabled: {
+      type: Boolean,
+      default: true,
+    },
+    sound: {
+      type: Boolean,
+      default: true,
+    },
+    vibration: {
+      type: Boolean,
+      default: true,
+    },
+  },
+
   createdAt: {
     type: Date,
     default: Date.now,

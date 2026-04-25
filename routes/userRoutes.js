@@ -149,4 +149,61 @@ router.get("/search", auth, async (req, res) => {
   }
 });
 
+// Get notification settings
+router.get("/notification-settings", auth, async (req, res) => {
+  try {
+    const profile = await UserProfile.findOne({ userId: req.user.id });
+
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Notification settings fetched successfully",
+      settings: profile.pushNotification || {
+        enabled: true,
+        sound: true,
+        vibration: true,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+// Update notification settings
+router.put("/notification-settings", auth, async (req, res) => {
+  const { enabled, sound, vibration } = req.body;
+
+  try {
+    const profile = await UserProfile.findOne({ userId: req.user.id });
+
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    // Update only provided fields
+    if (enabled !== undefined) {
+      profile.pushNotification.enabled = enabled;
+    }
+    if (sound !== undefined) {
+      profile.pushNotification.sound = sound;
+    }
+    if (vibration !== undefined) {
+      profile.pushNotification.vibration = vibration;
+    }
+
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Notification settings updated successfully",
+      settings: profile.pushNotification,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
 module.exports = router;

@@ -18,16 +18,30 @@ const getCurrentUser = async (authUserId) => {
 
 router.get("/", auth, async (req, res) => {
   try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 30, 1),
+      100,
+    );
     const currentUser = await getCurrentUser(req.user.id);
 
     if (!currentUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
+
+    // Get conversation IDs where current user is a participant
+    const userConversationIds = await mongoose
+      .model("Conversation")
+      .find({
+        participants: currentUser._id,
+      })
+      .distinct("_id");
 
     const unreadMessageFilter = {
       sender: { $ne: currentUser._id },
       seenBy: { $ne: currentUser._id },
+      conversation: { $in: userConversationIds },
     };
 
     const [pendingFollowRequests, unreadMessages] = await Promise.all([
@@ -68,8 +82,8 @@ router.get("/", auth, async (req, res) => {
       const existing = chatByConversation.get(conversationId);
 
       if (!existing) {
-        const participantIds = (message.conversation.participants || []).map((id) =>
-          id.toString()
+        const participantIds = (message.conversation.participants || []).map(
+          (id) => id.toString(),
         );
 
         chatByConversation.set(conversationId, {
@@ -86,7 +100,9 @@ router.get("/", auth, async (req, res) => {
             type: message.type,
             createdAt: message.createdAt,
           },
-          otherParticipantIds: participantIds.filter((id) => id !== currentUserId),
+          otherParticipantIds: participantIds.filter(
+            (id) => id !== currentUserId,
+          ),
         });
         return;
       }
@@ -95,12 +111,13 @@ router.get("/", auth, async (req, res) => {
     });
 
     const chatNotifications = Array.from(chatByConversation.values()).sort(
-      (a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt)
+      (a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt),
     );
 
-    const mergedNotifications = [...followNotifications, ...chatNotifications].sort(
-      (a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt)
-    );
+    const mergedNotifications = [
+      ...followNotifications,
+      ...chatNotifications,
+    ].sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
 
     res.status(200).json({
       success: true,
@@ -126,23 +143,35 @@ router.get("/counts", auth, async (req, res) => {
     const currentUser = await getCurrentUser(req.user.id);
 
     if (!currentUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
+
+    // Get conversation IDs where current user is a participant
+    const userConversationIds = await mongoose
+      .model("Conversation")
+      .find({
+        participants: currentUser._id,
+      })
+      .distinct("_id");
 
     const unreadMessageFilter = {
       sender: { $ne: currentUser._id },
       seenBy: { $ne: currentUser._id },
+      conversation: { $in: userConversationIds },
     };
 
-    const [followRequests, unreadMessages, unreadConversationIds] = await Promise.all([
-      FollowRequest.countDocuments({
-        to: currentUser._id,
-        status: "pending",
-        isDeleted: false,
-      }),
-      ChatMessage.countDocuments(unreadMessageFilter),
-      ChatMessage.distinct("conversation", unreadMessageFilter),
-    ]);
+    const [followRequests, unreadMessages, unreadConversationIds] =
+      await Promise.all([
+        FollowRequest.countDocuments({
+          to: currentUser._id,
+          status: "pending",
+          isDeleted: false,
+        }),
+        ChatMessage.countDocuments(unreadMessageFilter),
+        ChatMessage.distinct("conversation", unreadMessageFilter),
+      ]);
 
     res.status(200).json({
       success: true,
@@ -166,11 +195,16 @@ router.put("/seen", auth, async (req, res) => {
     const currentUser = await getCurrentUser(req.user.id);
 
     if (!currentUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     if (type === "follow-request") {
-      if (!followRequestId || !mongoose.Types.ObjectId.isValid(followRequestId)) {
+      if (
+        !followRequestId ||
+        !mongoose.Types.ObjectId.isValid(followRequestId)
+      ) {
         return res.status(400).json({
           success: false,
           message: "Valid followRequestId is required",
@@ -185,7 +219,7 @@ router.put("/seen", auth, async (req, res) => {
           isDeleted: false,
         },
         { isDeleted: true },
-        { new: true }
+        { new: true },
       );
 
       if (!request) {
@@ -217,7 +251,7 @@ router.put("/seen", auth, async (req, res) => {
         },
         {
           $addToSet: { seenBy: currentUser._id },
-        }
+        },
       );
 
       return res.status(200).json({

@@ -132,11 +132,11 @@ module.exports = (io) => {
 
       const request = await FollowRequest.findOne({ from: fromId, to: toId });
 
-      if (!request) {
-        return res
-          .status(404)
-          .json({ success: false, message: "No request found between users" });
-      }
+      // if (!request) {
+      //   return res
+      //     .status(404)
+      //     .json({ success: false, message: "No request found between users" });
+      // }
 
       res.json({ success: true, request });
     } catch (err) {
@@ -144,7 +144,7 @@ module.exports = (io) => {
     }
   });
 
-   router.delete("/delete/requests/:fromId/:toId", auth, async (req, res) => {
+  router.delete("/delete/requests/:fromId/:toId", auth, async (req, res) => {
     try {
       const { fromId, toId } = req.params;
 
@@ -237,13 +237,13 @@ module.exports = (io) => {
 
       // --- counts ---
       const totalFriends = friends.filter(
-        (f) => f.status === "accepted"
+        (f) => f.status === "accepted",
       ).length;
       const totalRequests = friends.filter(
-        (f) => f.status === "pending"
+        (f) => f.status === "pending",
       ).length;
       const totalOnline = friends.filter(
-        (f) => f.status === "accepted" && f.from.isOnline === true
+        (f) => f.status === "accepted" && f.from.isOnline === true,
       ).length;
 
       res.json({
@@ -276,13 +276,13 @@ module.exports = (io) => {
 
       // --- counts ---
       const totalFriends = friends.filter(
-        (f) => f.status === "accepted"
+        (f) => f.status === "accepted",
       ).length;
       const totalRequests = friends.filter(
-        (f) => f.status === "pending"
+        (f) => f.status === "pending",
       ).length;
       const totalOnline = friends.filter(
-        (f) => f.status === "accepted" && f.from.isOnline === true
+        (f) => f.status === "accepted" && f.from.isOnline === true,
       ).length;
 
       res.json({
