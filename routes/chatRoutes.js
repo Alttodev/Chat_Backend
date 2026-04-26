@@ -1,7 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const auth = require("../middleware/auth");
-const upload = require("../middleware/upload");
+const upload = require("../middleware/cloudinaryUpload");
 const User = require("../models/userCreate");
 const Conversation = require("../models/conversation");
 const ChatMessage = require("../models/chatMessage");
@@ -76,7 +76,7 @@ module.exports = (io) => {
       try {
         const { targetUserId } = req.params;
         const text = (req.body.text || "").trim();
-        const image = req.file ? `/uploads/${req.file.filename}` : null;
+        const image = req.file ? req.file.path : null;
 
         if (!text && !image) {
           return res.status(400).json({

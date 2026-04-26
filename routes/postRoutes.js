@@ -3,7 +3,7 @@ const router = express.Router();
 const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
-const upload = require("../middleware/upload");
+const upload = require("../middleware/cloudinaryUpload");
 
 // Create Post
 router.post("/create", auth, upload.single("image"), async (req, res) => {
@@ -19,7 +19,7 @@ router.post("/create", auth, upload.single("image"), async (req, res) => {
     const post = new Post({
       postText,
       user: user._id,
-      image: req.file ? `/uploads/${req.file.filename}` : null,
+      image: req.file ? req.file.path : null,
     });
 
     await post.save();
@@ -139,7 +139,7 @@ router.get("/list", auth, async (req, res) => {
       return {
         ...post.toObject(),
         likedByMe: post.likedBy.some(
-          (userId) => userId.toString() === req.user.id
+          (userId) => userId.toString() === req.user.id,
         ),
         isOwner:
           post.user && post.user._id.toString() === currentUser._id.toString(),
@@ -189,7 +189,7 @@ router.get("/list/:id", auth, async (req, res) => {
       return {
         ...rest,
         likedByMe: post.likedBy.some(
-          (likedUserId) => likedUserId.toString() === req.user.id
+          (likedUserId) => likedUserId.toString() === req.user.id,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
       };
