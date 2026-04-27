@@ -112,7 +112,7 @@ module.exports = (io) => {
       }
 
       const requests = await FollowRequest.find({ to: user._id })
-        .populate("from", "userName email address")
+        .populate("from", "userName email address profileImage")
         .populate("to", "userName email address")
         .sort({ createdAt: -1 });
 
@@ -177,7 +177,7 @@ module.exports = (io) => {
       }
 
       const friends = await FollowRequest.find({ to: user._id })
-        .populate("from", "userName email address isOnline")
+        .populate("from", "userName email address profileImage isOnline")
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
 
@@ -204,7 +204,7 @@ module.exports = (io) => {
       }
 
       const friends = await FollowRequest.find({ to: user._id })
-        .populate("from", "userName email address isOnline")
+        .populate("from", "userName email address profileImage isOnline")
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
 

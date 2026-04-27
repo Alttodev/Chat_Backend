@@ -300,7 +300,7 @@ module.exports = (io) => {
       const conversations = await Conversation.find({
         participants: currentUser._id,
       })
-        .populate("participants", "userName email isOnline lastSeen")
+        .populate("participants", "userName email profileImage isOnline lastSeen")
         .populate("lastMessage.sender", "userName")
         .sort({ lastMessageAt: -1 })
         .lean();

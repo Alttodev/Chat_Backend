@@ -122,7 +122,7 @@ router.get("/list", auth, async (req, res) => {
     const totalPosts = await Post.countDocuments();
 
     const posts = await Post.find()
-      .populate("user", "userName email")
+      .populate("user", "userName email profileImage")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -169,7 +169,7 @@ router.get("/list/:id", auth, async (req, res) => {
     const totalPosts = await Post.countDocuments({ user: userId });
 
     const posts = await Post.find({ user: userId })
-      .populate("user", "userName email address isOnline")
+      .populate("user", "userName email address profileImage isOnline")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -203,6 +203,7 @@ router.get("/list/:id", auth, async (req, res) => {
       userDetail,
       currentUser: {
         userName: currentUser.userName,
+        profileImage: currentUser.profileImage,
       },
       posts: postsWithExtra,
       totalPosts: totalPosts,

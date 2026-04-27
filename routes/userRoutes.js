@@ -2,34 +2,47 @@ const express = require("express");
 const router = express.Router();
 const UserProfile = require("../models/userCreate");
 const auth = require("../middleware/auth");
+const upload = require("../middleware/cloudinaryUpload");
 
 // profile create
 
-router.post("/create", auth, async (req, res) => {
-  const { userName, email, address } = req.body;
+router.post(
+  "/create",
+  auth,
+  upload.single("profileImage"),
+  async (req, res) => {
+    const { userName, email, address } = req.body;
 
-  try {
-    const userId = req.user.id;
-    const existingProfile = await UserProfile.findOne({ userId });
-    if (existingProfile) {
-      return res.status(400).json({ message: "Profile already exists" });
+    try {
+      const userId = req.user.id;
+      const existingProfile = await UserProfile.findOne({ userId });
+      if (existingProfile) {
+        return res.status(400).json({ message: "Profile already exists" });
+      }
+
+      const profileImage = req.file ? req.file.path : null;
+      const profile = new UserProfile({
+        userId,
+        userName,
+        email,
+        address,
+        profileImage,
+      });
+      await profile.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Profile created successfully",
+        profile,
+      });
+    } catch (e) {
+      res.status(500).json({ message: "Server Error" });
     }
-
-    const profile = new UserProfile({ userId, userName, email, address });
-    await profile.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Profile created successfully",
-      profile,
-    });
-  } catch (e) {
-    res.status(500).json({ message: "Server Error" });
-  }
-});
+  },
+);
 
 // Update profile
-router.put("/update", auth, async (req, res) => {
+router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
   const { userName, email, address } = req.body;
 
   try {
@@ -43,6 +56,9 @@ router.put("/update", auth, async (req, res) => {
     profile.userName = userName;
     profile.email = email;
     profile.address = address;
+    if (req.file) {
+      profile.profileImage = req.file.path;
+    }
 
     await profile.save();
 
@@ -69,6 +85,7 @@ router.get("/me", auth, async (req, res) => {
     res.status(200).json({
       message: "Profile verified successfully",
       profile: {
+        profileImage: profile.profileImage,
         userName: profile.userName,
         email: profile.email,
         address: profile.address,
@@ -96,6 +113,7 @@ router.get("/userProfiles", auth, async (req, res) => {
       isOnline: profile.isOnline,
       email: profile.email,
       address: profile.address,
+      profileImage: profile.profileImage,
       memberSince: profile.createdAt,
       lastUpdated: profile.updatedAt,
       id: profile._id,
@@ -124,6 +142,7 @@ router.get("/allprofiles", auth, async (req, res) => {
       isOnline: profile.isOnline,
       email: profile.email,
       address: profile.address,
+      profileImage: profile.profileImage,
       memberSince: profile.createdAt,
       lastUpdated: profile.updatedAt,
       id: profile._id,
@@ -160,6 +179,7 @@ router.get("/search", auth, async (req, res) => {
       isOnline: profile.isOnline,
       email: profile.email,
       address: profile.address,
+      profileImage: profile.profileImage,
       memberSince: profile.createdAt,
       lastUpdated: profile.updatedAt,
       id: profile._id,

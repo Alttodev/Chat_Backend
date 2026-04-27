@@ -32,7 +32,7 @@ const requestPasswordReset = async (req, res) => {
         pass: process.env.EMAIL_PASSWORD,
       },
     });
-
+    await transporter.verify(); 
     await transporter.sendMail({
       from: `"Clix" <${process.env.EMAIL_USER}>`,
       to: user.email,

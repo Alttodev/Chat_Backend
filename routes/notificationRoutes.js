@@ -50,11 +50,11 @@ router.get("/", auth, async (req, res) => {
         status: "pending",
         isDeleted: false,
       })
-        .populate("from", "userName email isOnline lastSeen")
+        .populate("from", "userName email profileImage isOnline lastSeen")
         .sort({ createdAt: -1 })
         .lean(),
       ChatMessage.find(unreadMessageFilter)
-        .populate("sender", "userName email isOnline lastSeen")
+        .populate("sender", "userName email profileImage isOnline lastSeen")
         .populate("conversation", "participants lastMessageAt")
         .sort({ createdAt: -1 })
         .lean(),
