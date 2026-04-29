@@ -28,11 +28,26 @@ module.exports = (io) => {
       });
       await request.save();
 
-      // io.to(request.from._id.toString()).emit("new-notification", {
-      //   type: "follow-response",
-      //   to: { id: request.to._id, name: request.to.userName },
-      //   message: `Your follow request was ${request.status}`,
-      // });
+      io.to(toUser.userId.toString()).emit("new-notification", {
+        type: "follow-request",
+        followRequestId: request._id,
+        from: {
+          id: user._id,
+          userId: user.userId,
+          userName: user.userName,
+          profileImage: user.profileImage,
+          isOnline: user.isOnline,
+        },
+        to: {
+          id: toUser._id,
+          userId: toUser.userId,
+          userName: toUser.userName,
+          profileImage: toUser.profileImage,
+          isOnline: toUser.isOnline,
+        },
+        createdAt: request.createdAt,
+        message: "New follow request received",
+      });
 
       res.status(201).json({
         success: true,
@@ -84,11 +99,27 @@ module.exports = (io) => {
 
       await request.save();
 
-      // io.to(request.from._id.toString()).emit("new-notification", {
-      //   type: "follow-response",
-      //   to: { id: request.to._id, name: request.to.userName },
-      //   message: `Your follow request was ${request.status}`,
-      // });
+      io.to(request.from.userId.toString()).emit("new-notification", {
+        type: "follow-response",
+        followRequestId: request._id,
+        from: {
+          id: request.from._id,
+          userId: request.from.userId,
+          userName: request.from.userName,
+          profileImage: request.from.profileImage,
+          isOnline: request.from.isOnline,
+        },
+        to: {
+          id: request.to._id,
+          userId: request.to.userId,
+          userName: request.to.userName,
+          profileImage: request.to.profileImage,
+          isOnline: request.to.isOnline,
+        },
+        status: request.status,
+        createdAt: request.updatedAt,
+        message: `Your follow request was ${request.status}`,
+      });
 
       res.json({
         success: true,
