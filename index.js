@@ -50,7 +50,7 @@ userSocket(io);
 app.use("/auth", authRouter);
 app.use("/profile", userRouter);
 app.use("/post", postRouter);
-app.use("/posts", commentRouter);
+app.use("/posts", commentRouter(io));
 app.use("/follow", followRouter(io));
 app.use("/chat", chatRouter(io));
 app.use("/notifications", notificationRouter);

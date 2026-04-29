@@ -4,6 +4,7 @@ const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
 const FollowRequest = require("../models/followRequest");
 const ChatMessage = require("../models/chatMessage");
+const Notification = require("../models/notification");
 
 const router = express.Router();
 
@@ -14,6 +15,25 @@ const toDateValue = (value) => {
 
 const getCurrentUser = async (authUserId) => {
   return User.findOne({ userId: authUserId }).lean();
+};
+
+const mapCommentMentionNotification = (notification) => {
+  if (!notification) {
+    return null;
+  }
+
+  return {
+    type: "comment-mention",
+    notificationId: notification._id,
+    createdAt: notification.createdAt,
+    isRead: notification.isRead,
+    postId: notification.post?._id || notification.post,
+    commentId: notification.commentId,
+    comment: notification.comment,
+    from: notification.from,
+    post: notification.post,
+    message: `${notification.from?.userName || "Someone"} mentioned you in a comment`,
+  };
 };
 
 router.get("/", auth, async (req, res) => {
@@ -59,6 +79,17 @@ router.get("/", auth, async (req, res) => {
         .sort({ createdAt: -1 })
         .lean(),
     ]);
+
+    const commentMentionNotifications = await Notification.find({
+      to: currentUser._id,
+      type: "comment-mention",
+      isDeleted: false,
+      isRead: false,
+    })
+      .populate("from", "userName email profileImage isOnline lastSeen")
+      .populate("post", "postText image createdAt user")
+      .sort({ createdAt: -1 })
+      .lean();
 
     const followNotifications = pendingFollowRequests
       .filter((request) => !!request.from)
@@ -114,9 +145,15 @@ router.get("/", auth, async (req, res) => {
       (a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt),
     );
 
+    const mentionNotifications = commentMentionNotifications
+      .map(mapCommentMentionNotification)
+      .filter(Boolean)
+      .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
+
     const mergedNotifications = [
       ...followNotifications,
       ...chatNotifications,
+      ...mentionNotifications,
     ].sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
 
     res.status(200).json({
@@ -126,11 +163,16 @@ router.get("/", auth, async (req, res) => {
         followRequests: followNotifications.length,
         unreadConversations: chatNotifications.length,
         unreadMessages: unreadMessages.length,
-        total: followNotifications.length + chatNotifications.length,
+        commentMentions: mentionNotifications.length,
+        total:
+          followNotifications.length +
+          chatNotifications.length +
+          mentionNotifications.length,
       },
       notifications: mergedNotifications.slice(0, limit),
       followRequestNotifications: followNotifications,
       chatNotifications,
+      commentMentionNotifications: mentionNotifications,
     });
   } catch (err) {
     console.error(err);
@@ -162,7 +204,7 @@ router.get("/counts", auth, async (req, res) => {
       conversation: { $in: userConversationIds },
     };
 
-    const [followRequests, unreadMessages, unreadConversationIds] =
+    const [followRequests, unreadMessages, unreadConversationIds, commentMentions] =
       await Promise.all([
         FollowRequest.countDocuments({
           to: currentUser._id,
@@ -171,6 +213,12 @@ router.get("/counts", auth, async (req, res) => {
         }),
         ChatMessage.countDocuments(unreadMessageFilter),
         ChatMessage.distinct("conversation", unreadMessageFilter),
+        Notification.countDocuments({
+          to: currentUser._id,
+          type: "comment-mention",
+          isDeleted: false,
+          isRead: false,
+        }),
       ]);
 
     res.status(200).json({
@@ -180,7 +228,8 @@ router.get("/counts", auth, async (req, res) => {
         followRequests,
         unreadConversations: unreadConversationIds.length,
         unreadMessages,
-        total: followRequests + unreadConversationIds.length,
+        commentMentions,
+        total: followRequests + unreadConversationIds.length + commentMentions,
       },
     });
   } catch (err) {
@@ -191,7 +240,12 @@ router.get("/counts", auth, async (req, res) => {
 
 router.put("/seen", auth, async (req, res) => {
   try {
-    const { type, followRequestId, conversationId } = req.body;
+    const {
+      type,
+      followRequestId,
+      conversationId,
+      notificationId,
+    } = req.body;
     const currentUser = await getCurrentUser(req.user.id);
 
     if (!currentUser) {
@@ -258,6 +312,39 @@ router.put("/seen", auth, async (req, res) => {
         success: true,
         message: "Chat notification marked as seen",
         updatedCount: result.modifiedCount || 0,
+      });
+    }
+
+    if (type === "comment-mention") {
+      if (!notificationId || !mongoose.Types.ObjectId.isValid(notificationId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid notificationId is required",
+        });
+      }
+
+      const notification = await Notification.findOneAndUpdate(
+        {
+          _id: notificationId,
+          to: currentUser._id,
+          type: "comment-mention",
+          isDeleted: false,
+          isRead: false,
+        },
+        { isRead: true },
+        { new: true },
+      );
+
+      if (!notification) {
+        return res.status(404).json({
+          success: false,
+          message: "Notification not found",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Comment mention notification marked as seen",
       });
     }
 
