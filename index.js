@@ -13,7 +13,7 @@ const { Server } = require("socket.io");
 const userSocket = require("./sockets/userSocket");
 const chatRouter = require("./routes/chatRoutes");
 const notificationRouter = require("./routes/notificationRoutes");
-const zegoRouter = require("./routes/zegoRoutes");
+const jitsiRouter = require("./routes/JitsiRoutes");
 const statusRouter = require("./routes/statusRoutes");
 
 const MONGODB_URI = process.env.MONGO_URL;
@@ -54,9 +54,8 @@ app.use("/posts", commentRouter(io));
 app.use("/follow", followRouter(io));
 app.use("/chat", chatRouter(io));
 app.use("/notifications", notificationRouter);
-app.use("/zego", zegoRouter);
+app.use("/jitsi", jitsiRouter);
 app.use("/status", statusRouter);
-
 
 const port = 4000;
 server.listen(port, async () => {
