@@ -28,7 +28,7 @@ router.post("/token", auth, async (req, res) => {
         message: "ZEGO_SERVER_SECRET must be exactly 32 characters",
       });
     }
-
+     console.log("Generating ZEGO token for user:", req.user.id);
     const authUserId = req.user.id.toString();
     const roomId = req.body?.roomId ? String(req.body.roomId).trim() : "";
     const privilege = req.body?.privilege;
