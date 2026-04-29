@@ -33,7 +33,7 @@ router.post("/signup", async (req, res) => {
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
-      { expiresIn: "6h" },
+      { expiresIn: "2d" },
       (err, token) => {
         if (err) {
           return res.status(500).send("Error generating token");
@@ -97,7 +97,7 @@ router.post("/login", async (req, res) => {
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
-      { expiresIn: "6h" },
+      { expiresIn: "2d" },
       (err, token) => {
         if (err) return res.status(500).send("Error generating token");
         res.status(201).json({
