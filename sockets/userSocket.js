@@ -35,6 +35,9 @@ const extractLegacyAuthUserId = (socket) => {
 };
 
 const userSocket = (io) => {
+  // Store userId -> socket.id mapping for direct communication
+  const users = {};
+
   io.on("connection", async (socket) => {
     let authUserId = null;
     const token = extractToken(socket);
@@ -98,6 +101,56 @@ const userSocket = (io) => {
       io.emit("user-online", authUserRoom);
     }
 
+    // 📱 Register user for direct socket communication
+    socket.on("register", (userId) => {
+      users[userId] = socket.id;
+      console.log(`User ${userId} registered with socket ${socket.id}`);
+    });
+
+    // 📞 Call initiated
+    socket.on("call:initiate", ({ callerId, callerName, receiverId, roomName }) => {
+      const receiverSocket = users[receiverId];
+
+      if (receiverSocket) {
+        io.to(receiverSocket).emit("call:incoming", {
+          callerId,
+          callerName,
+          roomName,
+        });
+        console.log(`Call initiated from ${callerId} to ${receiverId}`);
+      } else {
+        console.log(`Receiver ${receiverId} not found for call from ${callerId}`);
+        socket.emit("call:error", { message: "Receiver not available" });
+      }
+    });
+
+    // ✅ Call accepted
+    socket.on("call:accept", ({ callerId, roomName }) => {
+      const callerSocket = users[callerId];
+
+      if (callerSocket) {
+        io.to(callerSocket).emit("call:accepted", {
+          roomName,
+        });
+        console.log(`Call accepted from ${authUserId.toString()} to ${callerId}`);
+      } else {
+        console.log(`Caller ${callerId} not found`);
+        socket.emit("call:error", { message: "Caller not available" });
+      }
+    });
+
+    // ❌ Call rejected
+    socket.on("call:reject", ({ callerId }) => {
+      const callerSocket = users[callerId];
+
+      if (callerSocket) {
+        io.to(callerSocket).emit("call:rejected");
+        console.log(`Call rejected from ${authUserId.toString()} to ${callerId}`);
+      } else {
+        console.log(`Caller ${callerId} not found`);
+      }
+    });
+
     socket.on("check-user-status", async (id) => {
       const online = io.sockets.adapter.rooms.has(id) ? true : false;
       socket.emit("user-status", { id, online });
@@ -120,6 +173,14 @@ const userSocket = (io) => {
     });
 
     socket.on("disconnect", async () => {
+      // Clean up user mapping on disconnect
+      Object.keys(users).forEach((userId) => {
+        if (users[userId] === socket.id) {
+          delete users[userId];
+          console.log(`User ${userId} unregistered from socket mapping`);
+        }
+      });
+
       const activeRoomAfterDisconnect = io.sockets.adapter.rooms.get(authUserRoom);
       const hasOtherActiveConnections =
         !!activeRoomAfterDisconnect && activeRoomAfterDisconnect.size > 0;
