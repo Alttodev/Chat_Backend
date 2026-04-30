@@ -117,6 +117,7 @@ router.get("/userProfiles", auth, async (req, res) => {
       memberSince: profile.createdAt,
       lastUpdated: profile.updatedAt,
       id: profile._id,
+      userId: profile.userId,
     }));
 
     res.status(200).json({

@@ -44,7 +44,7 @@ router.post("/signup", async (req, res) => {
           token,
           user: { _id: user._id, email: user.email },
         });
-      }
+      },
     );
   } catch (err) {
     res.status(500).send("Error in Saving");
@@ -106,12 +106,13 @@ router.post("/login", async (req, res) => {
           token,
           user: {
             _id: user._id,
+            userId: user.userId || null,
             email: user.email,
             lastLogin: user.lastLogin,
             changedPassword: user.lastPasswordChange,
           },
         });
-      }
+      },
     );
   } catch (e) {
     console.error("Login error:", e.message);

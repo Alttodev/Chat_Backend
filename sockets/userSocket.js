@@ -41,7 +41,8 @@ const userSocket = (io) => {
      if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        authUserId = decoded?.user?.id;
+        authUserId = decoded?.user?.userId || decoded?.user?.id;
+        console.log(authUserId, "connected with socket token");
         if (!authUserId) {
           throw new Error("Invalid token payload");
         }
