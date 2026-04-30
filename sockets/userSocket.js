@@ -104,8 +104,8 @@ const userSocket = (io) => {
    socket.on("call:initiate", (data) => {
   const receiverRoom = data.receiverId.toString();
 
-  const room = io.sockets.adapter.rooms.get(receiverRoom);
-
+     const room = io.sockets.adapter.rooms.get(receiverRoom);
+      
   console.log("📡 Trying to call:", receiverRoom);
   console.log("📡 Available rooms:", io.sockets.adapter.rooms);
 
