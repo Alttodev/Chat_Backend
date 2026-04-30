@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
-
+const UserProfile = require("../models/userCreate");
 const User = require("../models/authUser");
 const { default: axios } = require("axios");
 const { requestPasswordReset } = require("../controllers/requestPassword");
@@ -85,6 +85,8 @@ router.post("/login", async (req, res) => {
     if (!user)
       return res.status(400).json({ message: "User not found, please signup" });
 
+    const profile = await UserProfile.findOne({ userId: user._id });
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
       return res.status(400).json({ message: "Incorrect Password" });
@@ -106,9 +108,8 @@ router.post("/login", async (req, res) => {
           token,
           user: {
             _id: user._id,
-            userId: user.userId || null,
             email: user.email,
-            userName: user.userName,
+            userName: profile?.userName,
             lastLogin: user.lastLogin,
             changedPassword: user.lastPasswordChange,
           },
