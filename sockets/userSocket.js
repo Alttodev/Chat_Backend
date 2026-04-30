@@ -38,8 +38,7 @@ const userSocket = (io) => {
   io.on("connection", async (socket) => {
     let authUserId = null;
     const token = extractToken(socket);
-
-    if (token) {
+     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         authUserId = decoded?.user?.id;
@@ -54,6 +53,7 @@ const userSocket = (io) => {
       }
     } else {
       authUserId = extractLegacyAuthUserId(socket);
+        console.log(authUserId, "connected with socket token");
       if (!authUserId) {
         console.log("No socket token or userId provided");
         socket.emit("socket-error", {
@@ -72,6 +72,7 @@ const userSocket = (io) => {
     }
 
     let user = null;
+   
     try {
       user = await User.findOneAndUpdate(
         { userId: authUserId },
@@ -79,6 +80,7 @@ const userSocket = (io) => {
         { new: true },
       );
       if (user) {
+         console.log(user,"User found for socket connection");
         console.log("User set online:", user.userName);
       } else {
         console.log("User not found for auth user id:", authUserId);
@@ -99,14 +101,30 @@ const userSocket = (io) => {
     }
 
     // � Call initiated - Forward to receiver
-    socket.on("call:initiate", (data) => {
-      io.to(data.receiverId).emit("call:incoming", {
-        callerId: data.callerId,
-        callerName: data.callerName,
-        roomName: data.roomName,
-      });
-      console.log(`Call initiated from ${data.callerId} to ${data.receiverId}`);
+   socket.on("call:initiate", (data) => {
+  const receiverRoom = data.receiverId.toString();
+
+  const room = io.sockets.adapter.rooms.get(receiverRoom);
+
+  console.log("📡 Trying to call:", receiverRoom);
+  console.log("📡 Available rooms:", io.sockets.adapter.rooms);
+
+  if (room && room.size > 0) {
+    io.to(receiverRoom).emit("call:incoming", {
+      callerId: data.callerId,
+      callerName: data.callerName,
+      roomName: data.roomName,
     });
+
+    console.log("✅ Call delivered to", receiverRoom);
+  } else {
+    console.log("❌ Receiver not connected:", receiverRoom);
+
+    socket.emit("call:error", {
+      message: "User not available to take call",
+    });
+  }
+});
 
     // ✅ Call accepted - Send to caller and receiver
     socket.on("call:accept", async (data) => {
