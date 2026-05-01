@@ -115,7 +115,10 @@ router.get("/feed", auth, async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .populate("userId", "userName profileImage isOnline lastSeen")
-      .populate("seenBy.user", "userName profileImage")
+      .populate({
+        path: "seenBy.user",
+        select: "userName profileImage",
+      })
       .lean();
 
     const statusByUserId = new Map();
