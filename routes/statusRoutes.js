@@ -8,6 +8,8 @@ const FollowRequest = require("../models/followRequest");
 
 const STATUS_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
+const cloudinary = require("cloudinary").v2;
+
 router.post("/upload", auth, upload.single("image"), async (req, res) => {
   try {
     const { caption = "" } = req.body;
@@ -27,21 +29,31 @@ router.post("/upload", auth, upload.single("image"), async (req, res) => {
       });
     }
 
-    await Status.deleteMany({ userId: user._id });
+    const existingStatus = await Status.findOne({ userId: user._id });
+    if (existingStatus?.imagePublicId) {
+      try {
+        await cloudinary.uploader.destroy(existingStatus.imagePublicId);
+      } catch (e) {
+        console.warn("Cloudinary delete failed (old status):", e.message);
+      }
+    }
 
+    await Status.deleteMany({ userId: user._id });
     const status = await Status.create({
       userId: user._id,
       image: req.file.path,
+      imagePublicId: req.file.filename,
       caption,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Status uploaded successfully",
       status,
     });
   } catch (err) {
-    res.status(500).json({
+    console.error("Upload status error:", err);
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
@@ -202,6 +214,50 @@ router.post("/seen/:statusId", auth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+router.delete("/delete", auth, async (req, res) => {
+  try {
+
+    const user = await User.findOne({ userId: req.user.id });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const status = await Status.findOne({ userId: user._id });
+    if (!status) {
+      return res.status(404).json({
+        success: false,
+        message: "No status found",
+      });
+    }
+
+    const publicId = status.imagePublicId;
+
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.warn("Cloudinary delete failed:", err.message);
+      }
+    }
+
+    await Status.deleteOne({ _id: status._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Status deleted successfully",
+    });
+  } catch (err) {
+    console.error("Delete status error:", err);
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });

@@ -12,6 +12,9 @@ const StatusSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    imagePublicId: {
+      type: String,
+    },
     caption: {
       type: String,
       default: "",
