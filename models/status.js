@@ -17,6 +17,18 @@ const StatusSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    seenBy: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        seenAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

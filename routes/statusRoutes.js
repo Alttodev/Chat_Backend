@@ -115,6 +115,7 @@ router.get("/feed", auth, async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .populate("userId", "userName profileImage isOnline lastSeen")
+      .populate("seenBy.user", "userName profileImage")
       .lean();
 
     const statusByUserId = new Map();
@@ -128,6 +129,7 @@ router.get("/feed", auth, async (req, res) => {
         createdAt: status.createdAt,
         updatedAt: status.updatedAt,
         user: status.userId,
+        seenBy: status.seenBy || [],
       });
     });
 
@@ -151,6 +153,50 @@ router.get("/feed", auth, async (req, res) => {
       message: "Friend statuses fetched successfully",
       count: statuses.length,
       statuses,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+router.post("/seen/:statusId", auth, async (req, res) => {
+  try {
+    const user = await User.findOne({ userId: req.user.id });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const status = await Status.findById(req.params.statusId);
+    if (!status) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Status not found" });
+    }
+
+    if (status.userId.toString() === user._id.toString()) {
+      return res.status(200).json({ success: true });
+    }
+
+    const alreadySeen = status.seenBy.find(
+      (entry) => entry.user.toString() === user._id.toString(),
+    );
+
+    if (!alreadySeen) {
+      status.seenBy.push({
+        user: user._id,
+        seenAt: new Date(),
+      });
+
+      await status.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Marked as seen",
     });
   } catch (err) {
     res.status(500).json({
