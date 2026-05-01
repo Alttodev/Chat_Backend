@@ -58,9 +58,12 @@ router.get("/me", auth, async (req, res) => {
       });
     }
 
-    const status = await Status.findOne({ userId: user._id }).sort({
-      createdAt: -1,
-    });
+    const status = await Status.findOne({ userId: user._id })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "seenBy.user",
+        select: "userName profileImage",
+      });
 
     if (
       !status ||
@@ -115,10 +118,6 @@ router.get("/feed", auth, async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .populate("userId", "userName profileImage isOnline lastSeen")
-      .populate({
-        path: "seenBy.user",
-        select: "userName profileImage",
-      })
       .lean();
 
     const statusByUserId = new Map();
