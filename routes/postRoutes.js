@@ -5,6 +5,22 @@ const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
 const upload = require("../middleware/cloudinaryUpload");
 
+const getLikeUserId = (like) => {
+  if (!like) return null;
+  if (typeof like === "object" && like.user) {
+    return like.user.toString();
+  }
+  return like.toString();
+};
+
+const getLikeTimestamp = (like) => {
+  if (!like || typeof like !== "object") {
+    return null;
+  }
+
+  return like.likedAt ? new Date(like.likedAt) : null;
+};
+
 // Create Post
 router.post("/create", auth, upload.single("image"), async (req, res) => {
   try {
@@ -139,12 +155,11 @@ router.get("/list", auth, async (req, res) => {
     const authUserId = req.user.id.toString();
 
     const postsWithExtra = posts.map((post) => {
+      const likedByIds = post.likedBy.map(getLikeUserId);
       return {
         ...post.toObject(),
-        likedByMe: post.likedBy.some(
-          (userId) =>
-            userId.toString() === currentUserId ||
-            userId.toString() === authUserId,
+        likedByMe: likedByIds.some(
+          (userId) => userId === currentUserId || userId === authUserId,
         ),
         isOwner:
           post.user && post.user._id.toString() === currentUser._id.toString(),
@@ -194,12 +209,11 @@ router.get("/list/:id", auth, async (req, res) => {
 
     const postsWithExtra = posts.map((post) => {
       const { user, ...rest } = post.toObject();
+      const likedByIds = post.likedBy.map(getLikeUserId);
       return {
         ...rest,
-        likedByMe: post.likedBy.some(
-          (likedUserId) =>
-            likedUserId.toString() === currentUserId ||
-            likedUserId.toString() === authUserId,
+        likedByMe: likedByIds.some(
+          (likedUserId) => likedUserId === currentUserId || likedUserId === authUserId,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
       };
@@ -266,9 +280,45 @@ router.get("/:id/liked-users", auth, async (req, res) => {
       });
     }
 
-    const likedUsers = await User.find({
-      $or: [{ _id: { $in: post.likedBy } }, { userId: { $in: post.likedBy } }],
+    const likeRecords = post.likedBy
+      .map((like) => ({
+        userId: getLikeUserId(like),
+        likedAt: getLikeTimestamp(like),
+      }))
+      .filter((like) => like.userId);
+
+    const likedUserIds = likeRecords.map((like) => like.userId);
+
+    const likedUsersDocs = await User.find({
+      $or: [
+        { _id: { $in: likedUserIds } },
+        { userId: { $in: likedUserIds } },
+      ],
     }).select("userName email profileImage address isOnline userId");
+
+    const userLookup = new Map();
+    likedUsersDocs.forEach((user) => {
+      userLookup.set(user._id.toString(), user);
+      userLookup.set(user.userId.toString(), user);
+    });
+
+    const likedUsers = likeRecords
+      .map((like) => {
+        const user = userLookup.get(like.userId.toString());
+        if (!user) return null;
+
+        return {
+          id: user._id,
+          userId: user.userId,
+          userName: user.userName,
+          email: user.email,
+          profileImage: user.profileImage,
+          address: user.address,
+          isOnline: user.isOnline,
+          likedAt: like.likedAt,
+        };
+      })
+      .filter(Boolean);
 
     res.status(200).json({
       success: true,
@@ -299,20 +349,25 @@ router.post("/:id/like", auth, async (req, res) => {
 
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
-    const likedByIds = post.likedBy.map((id) => id.toString());
+    const likedByIds = post.likedBy.map(getLikeUserId);
     let message = "";
 
     if (likedByIds.includes(currentUserId) || likedByIds.includes(authUserId)) {
       // Unlike
       post.likes -= 1;
       post.likedBy = post.likedBy.filter(
-        (id) => id.toString() !== currentUserId && id.toString() !== authUserId,
+        (like) =>
+          getLikeUserId(like) !== currentUserId &&
+          getLikeUserId(like) !== authUserId,
       );
       message = "Unliked successfully";
     } else {
       // Like
       post.likes += 1;
-      post.likedBy.push(currentUser._id);
+      post.likedBy.push({
+        user: currentUser._id,
+        likedAt: new Date(),
+      });
       message = "Liked successfully";
     }
 

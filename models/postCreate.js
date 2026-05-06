@@ -31,12 +31,10 @@ const PostSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  likedBy: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "user",
-    },
-  ],
+  likedBy: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
   comments: [CommentSchema],
 
   createdAt: {
