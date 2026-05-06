@@ -135,11 +135,16 @@ router.get("/list", auth, async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
     const postsWithExtra = posts.map((post) => {
       return {
         ...post.toObject(),
         likedByMe: post.likedBy.some(
-          (userId) => userId.toString() === req.user.id,
+          (userId) =>
+            userId.toString() === currentUserId ||
+            userId.toString() === authUserId,
         ),
         isOwner:
           post.user && post.user._id.toString() === currentUser._id.toString(),
@@ -182,6 +187,9 @@ router.get("/list/:id", auth, async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
     const userDetails = await User.findOne({ _id: userId });
 
     const postsWithExtra = posts.map((post) => {
@@ -189,7 +197,9 @@ router.get("/list/:id", auth, async (req, res) => {
       return {
         ...rest,
         likedByMe: post.likedBy.some(
-          (likedUserId) => likedUserId.toString() === req.user.id,
+          (likedUserId) =>
+            likedUserId.toString() === currentUserId ||
+            likedUserId.toString() === authUserId,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
       };
@@ -244,23 +254,65 @@ router.get("/info/:id", async (req, res) => {
   }
 });
 
+// get users who liked a post
+router.get("/:id/liked-users", auth, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id).select("likedBy likes");
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
+      });
+    }
+
+    const likedUsers = await User.find({
+      $or: [{ _id: { $in: post.likedBy } }, { userId: { $in: post.likedBy } }],
+    }).select("userName email profileImage address isOnline userId");
+
+    res.status(200).json({
+      success: true,
+      message: "Liked users fetched successfully",
+      likedUsers,
+      totalLikes: post.likes,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 //like post
 router.post("/:id/like", auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+    const likedByIds = post.likedBy.map((id) => id.toString());
     let message = "";
 
-    if (post.likedBy.includes(req.user.id)) {
+    if (likedByIds.includes(currentUserId) || likedByIds.includes(authUserId)) {
       // Unlike
       post.likes -= 1;
-      post.likedBy = post.likedBy.filter((id) => id.toString() !== req.user.id);
+      post.likedBy = post.likedBy.filter(
+        (id) => id.toString() !== currentUserId && id.toString() !== authUserId,
+      );
       message = "Unliked successfully";
     } else {
       // Like
       post.likes += 1;
-      post.likedBy.push(req.user.id);
+      post.likedBy.push(currentUser._id);
       message = "Liked successfully";
     }
 
@@ -272,7 +324,6 @@ router.post("/:id/like", auth, async (req, res) => {
       likedBy: post.likedBy,
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
