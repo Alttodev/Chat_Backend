@@ -21,6 +21,52 @@ const getLikeTimestamp = (like) => {
   return like.likedAt ? new Date(like.likedAt) : null;
 };
 
+const buildLikedUsers = async (likedBy = []) => {
+  const likeRecords = likedBy
+    .map((like) => ({
+      userId: getLikeUserId(like),
+      likedAt: getLikeTimestamp(like),
+    }))
+    .filter((like) => like.userId);
+
+  const likedUserIds = likeRecords.map((like) => like.userId);
+
+  if (!likedUserIds.length) {
+    return [];
+  }
+
+  const likedUsersDocs = await User.find({
+    $or: [
+      { _id: { $in: likedUserIds } },
+      { userId: { $in: likedUserIds } },
+    ],
+  }).select("userName email profileImage address isOnline userId");
+
+  const userLookup = new Map();
+  likedUsersDocs.forEach((user) => {
+    userLookup.set(user._id.toString(), user);
+    userLookup.set(user.userId.toString(), user);
+  });
+
+  return likeRecords
+    .map((like) => {
+      const user = userLookup.get(like.userId.toString());
+      if (!user) return null;
+
+      return {
+        id: user._id,
+        userId: user.userId,
+        userName: user.userName,
+        email: user.email,
+        profileImage: user.profileImage,
+        address: user.address,
+        isOnline: user.isOnline,
+        likedAt: like.likedAt,
+      };
+    })
+    .filter(Boolean);
+};
+
 // Create Post
 router.post("/create", auth, upload.single("image"), async (req, res) => {
   try {
@@ -153,11 +199,15 @@ router.get("/list", auth, async (req, res) => {
 
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
+    const likedUsersByPost = await Promise.all(
+      posts.map((post) => buildLikedUsers(post.likedBy)),
+    );
 
-    const postsWithExtra = posts.map((post) => {
+    const postsWithExtra = posts.map((post, index) => {
       const likedByIds = post.likedBy.map(getLikeUserId);
       return {
         ...post.toObject(),
+        likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
           (userId) => userId === currentUserId || userId === authUserId,
         ),
@@ -204,14 +254,18 @@ router.get("/list/:id", auth, async (req, res) => {
 
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
+     const likedUsersByPost = await Promise.all(
+      posts.map((post) => buildLikedUsers(post.likedBy)),
+    );
 
     const userDetails = await User.findOne({ _id: userId });
 
-    const postsWithExtra = posts.map((post) => {
+    const postsWithExtra = posts.map((post,index) => {
       const { user, ...rest } = post.toObject();
       const likedByIds = post.likedBy.map(getLikeUserId);
       return {
         ...rest,
+         likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
           (likedUserId) => likedUserId === currentUserId || likedUserId === authUserId,
         ),
