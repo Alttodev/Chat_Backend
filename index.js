@@ -15,7 +15,7 @@ const chatRouter = require("./routes/chatRoutes");
 const notificationRouter = require("./routes/notificationRoutes");
 // const jitsiRouter = require("./routes/JitsiRoutes");
 const statusRouter = require("./routes/statusRoutes");
-const profileviewRouter = require("./routes/profileViewRoutes");
+const profileviewRouter = require("./routes/profileViewsRoutes");
 
 const { profile } = require("console");
 
