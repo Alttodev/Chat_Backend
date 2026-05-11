@@ -16,6 +16,7 @@ const notificationRouter = require("./routes/notificationRoutes");
 // const jitsiRouter = require("./routes/JitsiRoutes");
 const statusRouter = require("./routes/statusRoutes");
 const profileviewRouter = require("./routes/profileViewRoutes");
+
 const { profile } = require("console");
 
 const MONGODB_URI = process.env.MONGO_URL;
