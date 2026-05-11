@@ -15,6 +15,8 @@ const chatRouter = require("./routes/chatRoutes");
 const notificationRouter = require("./routes/notificationRoutes");
 // const jitsiRouter = require("./routes/JitsiRoutes");
 const statusRouter = require("./routes/statusRoutes");
+const profileviewRouter = require("./routes/profileViewRoutes");
+const { profile } = require("console");
 
 const MONGODB_URI = process.env.MONGO_URL;
 
@@ -56,6 +58,7 @@ app.use("/chat", chatRouter(io));
 app.use("/notifications", notificationRouter);
 // app.use("/jitsi", jitsiRouter);
 app.use("/status", statusRouter);
+app.use("/profileviews", profileviewRouter);
 
 const port = 4000;
 server.listen(port, async () => {
