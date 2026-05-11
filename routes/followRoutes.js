@@ -251,6 +251,36 @@ module.exports = (io) => {
     }
   });
 
+  router.get("/friends/following/:id", auth, async (req, res) => {
+    const id = req.params.id;
+
+    try {
+      const user = await User.findOne({ _id: id });
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      const following = await FollowRequest.find({
+        from: user._id,
+        status: "accepted",
+      })
+        .populate("to", "userName email address profileImage isOnline")
+        .populate("from", "userName email address isOnline")
+        .sort({ createdAt: -1 });
+
+      res.json({
+        success: true,
+        totalFollowing: following,
+        message: "Following Listed Successfully",
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
+
   router.get("/counts", auth, async (req, res) => {
     try {
       const user = await User.findOne({ userId: req.user.id });
@@ -265,7 +295,7 @@ module.exports = (io) => {
         .populate("from", "userName email address isOnline")
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
-
+      const following = await FollowRequest.find({ from: user._id });
       // --- counts ---
       const totalFriends = friends.filter(
         (f) => f.status === "accepted",
@@ -276,6 +306,9 @@ module.exports = (io) => {
       const totalOnline = friends.filter(
         (f) => f.status === "accepted" && f.from.isOnline === true,
       ).length;
+      const totalFollowing = following.filter(
+        (f) => f.status === "accepted",
+      ).length;
 
       res.json({
         success: true,
@@ -283,6 +316,7 @@ module.exports = (io) => {
         totalFriends,
         totalRequests,
         totalOnline,
+        totalFollowing,
       });
     } catch (err) {
       console.error(err);
@@ -304,7 +338,7 @@ module.exports = (io) => {
         .populate("from", "userName email address isOnline")
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
-
+      const following = await FollowRequest.find({ from: user._id });
       // --- counts ---
       const totalFriends = friends.filter(
         (f) => f.status === "accepted",
@@ -316,12 +350,17 @@ module.exports = (io) => {
         (f) => f.status === "accepted" && f.from.isOnline === true,
       ).length;
 
+      const totalFollowing = following.filter(
+        (f) => f.status === "accepted",
+      ).length;
+
       res.json({
         success: true,
         message: "Count Listed Successfully",
         totalFriends,
         totalRequests,
         totalOnline,
+        totalFollowing,
       });
     } catch (err) {
       console.error(err);
