@@ -14,7 +14,7 @@ const ConversationSchema = new mongoose.Schema(
       image: { type: String, default: null },
       type: {
         type: String,
-        enum: ["text", "image", "mixed"],
+        enum: ["text", "image", "video", "mixed"],
         default: "text",
       },
       sender: {

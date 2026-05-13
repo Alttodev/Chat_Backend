@@ -1,7 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const upload = require("../middleware/cloudinaryUpload");
+const {
+  mediaUpload,
+  ensureVideoDuration,
+} = require("../middleware/cloudinaryUpload");
 const User = require("../models/userCreate");
 const Status = require("../models/status");
 const FollowRequest = require("../models/followRequest");
@@ -10,14 +13,16 @@ const STATUS_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 const cloudinary = require("cloudinary").v2;
 
-router.post("/upload", auth, upload.single("image"), async (req, res) => {
+router.post("/upload", auth, mediaUpload.single("image"), async (req, res) => {
   try {
     const { caption = "" } = req.body;
+
+    await ensureVideoDuration(req.file, 60);
 
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "Image is required",
+        message: "Image or video is required",
       });
     }
 
@@ -52,6 +57,12 @@ router.post("/upload", auth, upload.single("image"), async (req, res) => {
       status,
     });
   } catch (err) {
+    if (err?.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("Upload status error:", err);
     return res.status(500).json({
       success: false,

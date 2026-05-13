@@ -3,7 +3,10 @@ const router = express.Router();
 const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
-const upload = require("../middleware/cloudinaryUpload");
+const {
+  mediaUpload,
+  ensureVideoDuration,
+} = require("../middleware/cloudinaryUpload");
 
 const getLikeUserId = (like) => {
   if (!like) return null;
@@ -68,9 +71,11 @@ const buildLikedUsers = async (likedBy = []) => {
 };
 
 // Create Post
-router.post("/create", auth, upload.single("image"), async (req, res) => {
+router.post("/create", auth, mediaUpload.single("image"), async (req, res) => {
   try {
     const { postText } = req.body;
+
+    await ensureVideoDuration(req.file, 60);
 
     const user = await User.findOne({ userId: req.user.id });
     if (!user)
@@ -92,6 +97,12 @@ router.post("/create", auth, upload.single("image"), async (req, res) => {
       post,
     });
   } catch (err) {
+    if (err?.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
   }

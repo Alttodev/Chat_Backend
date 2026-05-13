@@ -1,11 +1,11 @@
 # Cloudinary Integration Setup Guide
 
-This guide will help you integrate Cloudinary for image storage in your chat and post uploads.
+This guide will help you integrate Cloudinary for image and video storage in your chat, post, and status uploads.
 
 ## What Changed
 
 - **Local file uploads** have been replaced with **Cloudinary cloud storage**
-- Images are now stored securely in the cloud with automatic optimization
+- Images and short videos are stored securely in the cloud with automatic optimization
 - All image URLs are now CDN-delivered Cloudinary URLs for better performance
 
 ## Prerequisites
@@ -57,6 +57,7 @@ The required packages have been installed:
 
 ```javascript
 const upload = require("../middleware/cloudinaryUpload");
+const { mediaUpload } = require("../middleware/cloudinaryUpload");
 
 // Usage in routes:
 router.post("/create", auth, upload.single("image"), async (req, res) => {
@@ -65,6 +66,11 @@ router.post("/create", auth, upload.single("image"), async (req, res) => {
   // req.file.filename = public_id in Cloudinary
   // req.file.size = file size in bytes
 });
+
+router.post("/create", auth, mediaUpload.single("image"), async (req, res) => {
+  // Accepts JPG/JPEG/PNG/GIF/WebP/AVIF/MP4
+  // Video uploads are limited to 30 MB and 60 seconds
+});
 ```
 
 ### Image Storage
@@ -72,8 +78,10 @@ router.post("/create", auth, upload.single("image"), async (req, res) => {
 - **Post Images**: Stored via `POST /posts/create` endpoint
 - **Chat Message Images**: Stored via `POST /conversations/:targetUserId/messages` endpoint
 - **Folder Structure**: All uploads go to `chat_app_uploads/` folder in Cloudinary
-- **File Limit**: 5 MB per file
-- **Supported Formats**: JPG, JPEG, PNG, GIF, WebP, AVIF
+- **Image File Limit**: 5 MB per file
+- **Media File Limit**: 30 MB per file
+- **Supported Formats**: JPG, JPEG, PNG, GIF, WebP, AVIF, MP4
+- **Video Limit**: 60 seconds max for MP4 uploads
 
 ## Benefits
 

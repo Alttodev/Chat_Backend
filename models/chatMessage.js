@@ -25,7 +25,7 @@ const ChatMessageSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["text", "image", "mixed"],
+      enum: ["text", "image", "video", "mixed"],
       required: true,
     },
     seenBy: [

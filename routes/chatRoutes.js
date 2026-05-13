@@ -1,7 +1,10 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const auth = require("../middleware/auth");
-const upload = require("../middleware/cloudinaryUpload");
+const {
+  mediaUpload,
+  ensureVideoDuration,
+} = require("../middleware/cloudinaryUpload");
 const User = require("../models/userCreate");
 const Conversation = require("../models/conversation");
 const ChatMessage = require("../models/chatMessage");
@@ -71,17 +74,20 @@ module.exports = (io) => {
   router.post(
     "/conversations/:targetUserId/messages",
     auth,
-    upload.single("image"),
+    mediaUpload.single("image"),
     async (req, res) => {
       try {
         const { targetUserId } = req.params;
         const text = (req.body.text || "").trim();
         const image = req.file ? req.file.path : null;
+        const isVideo = req.file?.mimetype?.startsWith("video/");
+
+        await ensureVideoDuration(req.file, 60);
 
         if (!text && !image) {
           return res.status(400).json({
             success: false,
-            message: "Either text or image is required",
+            message: "Either text or media is required",
           });
         }
 
@@ -138,7 +144,8 @@ module.exports = (io) => {
           });
         }
 
-        const type = image && text ? "mixed" : image ? "image" : "text";
+        const mediaType = isVideo ? "video" : image ? "image" : "text";
+        const type = text && image ? "mixed" : mediaType;
 
         const message = await ChatMessage.create({
           conversation: conversation._id,
@@ -177,6 +184,12 @@ module.exports = (io) => {
           chatMessage: payload,
         });
       } catch (err) {
+        if (err?.statusCode) {
+          return res.status(err.statusCode).json({
+            success: false,
+            message: err.message,
+          });
+        }
         console.error(err);
         res.status(500).json({ success: false, message: "Server error" });
       }
