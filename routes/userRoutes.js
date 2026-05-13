@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const UserProfile = require("../models/userCreate");
+const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const upload = require("../middleware/cloudinaryUpload");
 
@@ -130,10 +131,21 @@ router.get("/userProfiles", auth, async (req, res) => {
   }
 });
 
-//including me all profiles get
-router.get("/allprofiles", auth, async (req, res) => {
+router.get("/chart", auth, async (req, res) => {
   try {
     const profiles = await UserProfile.find();
+    const totalPosts = await Post.countDocuments();
+    const postCounts = await Post.aggregate([
+      {
+        $group: {
+          _id: "$user",
+          totalPosts: { $sum: 1 },
+        },
+      },
+    ]);
+    const postCountMap = new Map(
+      postCounts.map((item) => [item._id.toString(), item.totalPosts]),
+    );
 
     if (!profiles || profiles.length === 0) {
       return res.status(404).json({ message: "No profiles found" });
@@ -147,11 +159,13 @@ router.get("/allprofiles", auth, async (req, res) => {
       memberSince: profile.createdAt,
       lastUpdated: profile.updatedAt,
       id: profile._id,
+      totalPosts: postCountMap.get(profile._id.toString()) || 0,
     }));
     res.status(200).json({
       success: true,
       message: "Users listed successfully",
       profiles: formattedProfiles,
+      totalPosts,
     });
   } catch (err) {
     res.status(500).json({ message: "Server Error" });
