@@ -2,10 +2,7 @@ const User = require("../models/userCreate");
 const { getFirebaseAdmin } = require("./firebaseAdmin");
 
 const toStringValue = (value) => {
-  if (value === undefined || value === null) {
-    return "";
-  }
-
+  if (value === undefined || value === null) return "";
   return String(value);
 };
 
@@ -13,10 +10,7 @@ const buildDataPayload = (data = {}) => {
   const payload = {};
 
   Object.entries(data).forEach(([key, value]) => {
-    if (value === undefined || value === null) {
-      return;
-    }
-
+    if (value === undefined || value === null) return;
     payload[key] = toStringValue(value);
   });
 
@@ -29,9 +23,7 @@ const getRecipientPushTokens = (user) => {
 };
 
 const removeInvalidTokens = async (userId, invalidTokens) => {
-  if (!invalidTokens.length) {
-    return;
-  }
+  if (!invalidTokens.length) return;
 
   await User.updateOne(
     { _id: userId },
@@ -41,7 +33,7 @@ const removeInvalidTokens = async (userId, invalidTokens) => {
           token: { $in: invalidTokens },
         },
       },
-    },
+    }
   );
 };
 
@@ -63,9 +55,9 @@ const sendPushToUser = async (userOrId, notification = {}) => {
 
   const user = hasPushFields
     ? userOrId
-    : await User.findById(
-        typeof userOrId === "object" ? userOrId._id : userOrId,
-      ).select("userName pushTokens pushNotification");
+    : await User.findById(typeof userOrId === "object" ? userOrId._id : userOrId).select(
+        "userName pushTokens pushNotification"
+      );
 
   if (!user) {
     return { success: false, skipped: true, reason: "user-not-found" };
@@ -82,15 +74,16 @@ const sendPushToUser = async (userOrId, notification = {}) => {
 
   const title = notification.title || "New notification";
   const body = notification.body || "";
-  const data = buildDataPayload(notification.data);
+  const data = buildDataPayload({
+    ...notification.data,
+    title,
+    body,
+  });
 
   const messaging = admin.messaging();
+
   const response = await messaging.sendEachForMulticast({
     tokens,
-    notification: {
-      title,
-      body,
-    },
     data,
     webpush: {
       headers: {
