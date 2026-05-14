@@ -104,7 +104,7 @@ const sendPushToUser = async (userOrId, notification = {}) => {
     },
   });
 
-  console.log("FCM Response:", JSON.stringify(response, null, 2));
+
 
   response.responses.forEach((item, index) => {
     if (!item.success) {
