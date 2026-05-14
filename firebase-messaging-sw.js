@@ -16,10 +16,11 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload?.data?.title || "New notification";
+
+  const title = payload?.notification?.title || "New notification";
 
   const options = {
-    body: payload?.data?.body || "",
+    body: payload?.notification?.body || "",
     icon: "/logo.png",
     data: payload?.data || {},
   };
