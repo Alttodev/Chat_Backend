@@ -28,7 +28,7 @@ module.exports = (io) => {
 
       const post = await Post.findById(req.params.id).populate(
         "user",
-        "userName"
+        "userName",
       );
 
       if (!post) {
@@ -52,11 +52,11 @@ module.exports = (io) => {
 
       const populatedPost = await Post.findById(req.params.id).populate(
         "comments.user",
-        "userName"
+        "userName",
       );
 
       const sortedComments = [...populatedPost.comments].sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       );
 
       const mentionedUsernames = extractMentions(comment);
@@ -78,7 +78,7 @@ module.exports = (io) => {
             }
 
             return matchedUser;
-          })
+          }),
         );
 
         lookupResults.filter(Boolean).forEach((matchedUser) => {
@@ -94,14 +94,14 @@ module.exports = (io) => {
               post: post._id,
               commentId: addedComment?._id,
               comment,
-            })
-          )
+            }),
+          ),
         );
 
         const mentionRecipients = lookupResults.filter(Boolean);
 
         await Promise.all(
-          notificationDocs.map((notificationDoc, index) => {
+          notificationDocs.map(async (notificationDoc, index) => {
             const matchedUser = mentionRecipients[index];
 
             if (io) {
@@ -130,7 +130,7 @@ module.exports = (io) => {
               });
             }
 
-            return sendPushToUser(matchedUser, {
+            return await sendPushToUser(matchedUser, {
               title: "Comment mention",
               body: `${user.userName} mentioned you in a comment`,
               data: {
@@ -158,43 +158,43 @@ module.exports = (io) => {
     }
   });
 
-//comment list
+  //comment list
 
   router.get("/:id/comments", auth, async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id)
-      .populate("comments.user", "userName profileImage")
-      .select("comments");
+    try {
+      const post = await Post.findById(req.params.id)
+        .populate("comments.user", "userName profileImage")
+        .select("comments");
 
-    if (!post) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Post not found" });
+      if (!post) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Post not found" });
+      }
+
+      const user = await User.findOne({ userId: req.user.id });
+
+      const sortedComments = [...post.comments].sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      );
+
+      const commentsWithEditable = sortedComments.map((comment) => ({
+        _id: comment._id,
+        comment: comment.comment,
+        user: comment.user,
+        createdAt: comment.createdAt,
+        editable: comment.user._id.toString() === user._id.toString(),
+      }));
+
+      res.status(200).json({
+        success: true,
+        message: "Comments fetched successfully",
+        comments: commentsWithEditable,
+      });
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).json({ success: false, message: "Server Error" });
     }
-
-    const user = await User.findOne({ userId: req.user.id });
-
-    const sortedComments = [...post.comments].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
-
-    const commentsWithEditable = sortedComments.map((comment) => ({
-      _id: comment._id,
-      comment: comment.comment,
-      user: comment.user,
-      createdAt: comment.createdAt,
-      editable: comment.user._id.toString() === user._id.toString(),
-    }));
-
-    res.status(200).json({
-      success: true,
-      message: "Comments fetched successfully",
-      comments: commentsWithEditable,
-    });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
   });
 
   //delete comment

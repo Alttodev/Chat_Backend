@@ -10,6 +10,7 @@ const Conversation = require("../models/conversation");
 const ChatMessage = require("../models/chatMessage");
 const ChatBlock = require("../models/chatBlock");
 const FollowRequest = require("../models/followRequest");
+const { sendPushToUser } = require("../utils/pushNotifications");
 
 module.exports = (io) => {
   const router = express.Router();
@@ -177,6 +178,25 @@ module.exports = (io) => {
           message: payload,
         });
 
+        // push notification for target user
+        await sendPushToUser(targetUser, {
+          title: currentUser.userName || "New message",
+          body:
+            text ||
+            (type === "image"
+              ? "Sent an image"
+              : type === "video"
+                ? "Sent a video"
+                : "Sent you a message"),
+          data: {
+            type: "chat-message",
+            conversationId: conversation._id.toString(),
+            messageId: message._id.toString(),
+            fromUserId: currentUser.userId.toString(),
+            fromName: currentUser.userName,
+          },
+        });
+
         res.status(201).json({
           success: true,
           message: "Message sent successfully",
@@ -313,7 +333,10 @@ module.exports = (io) => {
       const conversations = await Conversation.find({
         participants: currentUser._id,
       })
-        .populate("participants", "userName email profileImage isOnline lastSeen")
+        .populate(
+          "participants",
+          "userName email profileImage isOnline lastSeen",
+        )
         .populate("lastMessage.sender", "userName")
         .sort({ lastMessageAt: -1 })
         .lean();

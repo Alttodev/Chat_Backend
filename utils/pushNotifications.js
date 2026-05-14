@@ -48,7 +48,11 @@ const removeInvalidTokens = async (userId, invalidTokens) => {
 const sendPushToUser = async (userOrId, notification = {}) => {
   const admin = getFirebaseAdmin();
   if (!admin) {
-    return { success: false, skipped: true, reason: "firebase-admin-not-ready" };
+    return {
+      success: false,
+      skipped: true,
+      reason: "firebase-admin-not-ready",
+    };
   }
 
   const hasPushFields =
@@ -98,6 +102,16 @@ const sendPushToUser = async (userOrId, notification = {}) => {
           }
         : undefined,
     },
+  });
+
+  console.log("FCM Response:", JSON.stringify(response, null, 2));
+
+  response.responses.forEach((item, index) => {
+    if (!item.success) {
+      console.log("Failed Token:", tokens[index]);
+      console.log("Error Code:", item.error?.code);
+      console.log("Error Message:", item.error?.message);
+    }
   });
 
   const invalidTokens = [];
