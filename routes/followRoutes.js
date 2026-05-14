@@ -2,6 +2,7 @@ const express = require("express");
 const FollowRequest = require("../models/followRequest");
 const User = require("../models/userCreate");
 const auth = require("../middleware/auth");
+const { sendPushToUser } = require("../utils/pushNotifications");
 
 module.exports = (io) => {
   const router = express.Router();
@@ -47,6 +48,17 @@ module.exports = (io) => {
         },
         createdAt: request.createdAt,
         message: "New follow request received",
+      });
+
+      await sendPushToUser(toUser, {
+        title: "Follow request",
+        body: `${user.userName} sent you a follow request`,
+        data: {
+          type: "follow-request",
+          followRequestId: request._id,
+          fromUserId: user.userId,
+          fromName: user.userName,
+        },
       });
 
       res.status(201).json({
@@ -119,6 +131,18 @@ module.exports = (io) => {
         status: request.status,
         createdAt: request.updatedAt,
         message: `Your follow request was ${request.status}`,
+      });
+
+      await sendPushToUser(request.from, {
+        title: "Follow request update",
+        body: `Your follow request was ${request.status}`,
+        data: {
+          type: "follow-response",
+          followRequestId: request._id,
+          status: request.status,
+          toUserId: request.to.userId,
+          toName: request.to.userName,
+        },
       });
 
       res.json({

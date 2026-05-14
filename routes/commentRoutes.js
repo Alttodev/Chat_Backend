@@ -4,6 +4,7 @@ const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
 const Notification = require("../models/notification");
+const { sendPushToUser } = require("../utils/pushNotifications");
 
 const extractMentions = (text) => {
   const matches = text.match(/@([a-zA-Z0-9_.-]+)/g) || [];
@@ -97,35 +98,52 @@ module.exports = (io) => {
           )
         );
 
-        notificationDocs.forEach((notificationDoc, index) => {
-          const matchedUser = lookupResults.filter(Boolean)[index];
+        const mentionRecipients = lookupResults.filter(Boolean);
 
-          if (io) {
-            io.to(matchedUser.userId.toString()).emit("new-notification", {
-              type: "comment-mention",
-              notificationId: notificationDoc._id,
-              postId: post._id,
-              commentId: addedComment?._id,
-              from: {
-                id: user._id,
-                userId: user.userId,
-                userName: user.userName,
-                profileImage: user.profileImage,
-                isOnline: user.isOnline,
+        await Promise.all(
+          notificationDocs.map((notificationDoc, index) => {
+            const matchedUser = mentionRecipients[index];
+
+            if (io) {
+              io.to(matchedUser.userId.toString()).emit("new-notification", {
+                type: "comment-mention",
+                notificationId: notificationDoc._id,
+                postId: post._id,
+                commentId: addedComment?._id,
+                from: {
+                  id: user._id,
+                  userId: user.userId,
+                  userName: user.userName,
+                  profileImage: user.profileImage,
+                  isOnline: user.isOnline,
+                },
+                to: {
+                  id: matchedUser._id,
+                  userId: matchedUser.userId,
+                  userName: matchedUser.userName,
+                  profileImage: matchedUser.profileImage,
+                  isOnline: matchedUser.isOnline,
+                },
+                comment,
+                createdAt: notificationDoc.createdAt,
+                message: `${user.userName} mentioned you in a comment`,
+              });
+            }
+
+            return sendPushToUser(matchedUser, {
+              title: "Comment mention",
+              body: `${user.userName} mentioned you in a comment`,
+              data: {
+                type: "comment-mention",
+                notificationId: notificationDoc._id,
+                postId: post._id,
+                commentId: addedComment?._id,
+                fromUserId: user.userId,
+                fromName: user.userName,
               },
-              to: {
-                id: matchedUser._id,
-                userId: matchedUser.userId,
-                userName: matchedUser.userName,
-                profileImage: matchedUser.profileImage,
-                isOnline: matchedUser.isOnline,
-              },
-              comment,
-              createdAt: notificationDoc.createdAt,
-              message: `${user.userName} mentioned you in a comment`,
             });
-          }
-        });
+          }),
+        );
       }
 
       res.status(201).json({

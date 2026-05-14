@@ -44,6 +44,27 @@ const UserSchema = new mongoose.Schema({
     },
   },
 
+  pushTokens: [
+    {
+      token: {
+        type: String,
+        required: true,
+      },
+      deviceName: {
+        type: String,
+        default: null,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+      lastSeenAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
+
   createdAt: {
     type: Date,
     default: Date.now,

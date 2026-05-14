@@ -267,4 +267,86 @@ router.put("/notification-settings", auth, async (req, res) => {
   }
 });
 
+router.post("/push-tokens", auth, async (req, res) => {
+  const { token, deviceName } = req.body;
+
+  if (!token || typeof token !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "Push token is required",
+    });
+  }
+
+  try {
+    const normalizedToken = token.trim();
+    const profile = await UserProfile.findOne({ userId: req.user.id });
+
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found" });
+    }
+
+    const existingTokenIndex = (profile.pushTokens || []).findIndex(
+      (entry) => entry.token === normalizedToken,
+    );
+
+    if (existingTokenIndex !== -1) {
+      profile.pushTokens[existingTokenIndex].deviceName = deviceName || null;
+      profile.pushTokens[existingTokenIndex].lastSeenAt = new Date();
+    } else {
+      profile.pushTokens.push({
+        token: normalizedToken,
+        deviceName: deviceName || null,
+        lastSeenAt: new Date(),
+      });
+    }
+
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Push token registered successfully",
+      tokensCount: profile.pushTokens.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+router.delete("/push-tokens", auth, async (req, res) => {
+  const { token } = req.body;
+
+  if (!token || typeof token !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "Push token is required",
+    });
+  }
+
+  try {
+    const profile = await UserProfile.findOneAndUpdate(
+      { userId: req.user.id },
+      {
+        $pull: {
+          pushTokens: { token: token.trim() },
+        },
+      },
+      { new: true },
+    );
+
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Push token removed successfully",
+      tokensCount: profile.pushTokens.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
 module.exports = router;
