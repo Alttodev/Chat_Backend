@@ -25,26 +25,26 @@ const requestPasswordReset = async (req, res) => {
 
     const resetURL = `${process.env.FRONTEND_URL}/reset-password?token=${token}&id=${user._id}`;
 
-    // const transporter = nodemailer.createTransport({
-    //   service: "gmail",
-    //   auth: {
-    //     user: process.env.EMAIL_USER,
-    //     pass: process.env.EMAIL_PASSWORD,
-    //   },
-    // });
-
     const transporter = nodemailer.createTransport({
-      host: process.env.BREVO_SMTP_HOST,
-      port: Number(process.env.BREVO_SMTP_PORT),
-      secure: false,
+      service: "gmail",
       auth: {
-        user: process.env.BREVO_SMTP_USER,
-        pass: process.env.BREVO_SMTP_PASS,
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
       },
     });
+
+    // const transporter = nodemailer.createTransport({
+    //   host: process.env.BREVO_SMTP_HOST,
+    //   port: Number(process.env.BREVO_SMTP_PORT),
+    //   secure: false,
+    //   auth: {
+    //     user: process.env.BREVO_SMTP_USER,
+    //     pass: process.env.BREVO_SMTP_PASS,
+    //   },
+    // });
     await transporter.verify();
     await transporter.sendMail({
-      from: `"Clix" <alttodev@gmail.com>`,
+      from: `"Clix" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: "Password Reset Request",
       html: `

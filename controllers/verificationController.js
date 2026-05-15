@@ -3,27 +3,27 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
 
-// const createTransporter = () => {
-//   return nodemailer.createTransport({
-//     service: "gmail",
-//     auth: {
-//       user: process.env.EMAIL_USER,
-//       pass: process.env.EMAIL_PASSWORD,
-//     },
-//   });
-// };
-
 const createTransporter = () => {
   return nodemailer.createTransport({
-    host: process.env.BREVO_SMTP_HOST,
-    port: Number(process.env.BREVO_SMTP_PORT),
-    secure: false,
+    service: "gmail",
     auth: {
-      user: process.env.BREVO_SMTP_USER,
-      pass: process.env.BREVO_SMTP_PASS,
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
     },
   });
 };
+
+// const createTransporter = () => {
+//   return nodemailer.createTransport({
+//     host: process.env.BREVO_SMTP_HOST,
+//     port: Number(process.env.BREVO_SMTP_PORT),
+//     secure: false,
+//     auth: {
+//       user: process.env.BREVO_SMTP_USER,
+//       pass: process.env.BREVO_SMTP_PASS,
+//     },
+//   });
+// };
 
 const requestVerification = async (req, res) => {
   try {
@@ -60,7 +60,7 @@ const requestVerification = async (req, res) => {
     await transporter.verify();
 
     await transporter.sendMail({
-      from: `"Clix" <alttodev@gmail.com>`,
+      from: `"Clix" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: "Verify Your Account",
       html: `
