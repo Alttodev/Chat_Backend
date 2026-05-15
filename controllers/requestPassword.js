@@ -44,7 +44,7 @@ const requestPasswordReset = async (req, res) => {
     });
     await transporter.verify();
     await transporter.sendMail({
-      from: `"Clix" <${process.env.BREVO_SMTP_USER}>`,
+      from: `"Clix" <alttodev@gmail.com>`,
       to: user.email,
       subject: "Password Reset Request",
       html: `
