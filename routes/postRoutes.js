@@ -250,7 +250,7 @@ router.get("/list/:id", auth, async (req, res) => {
     const totalPosts = await Post.countDocuments({ user: userId });
 
     const posts = await Post.find({ user: userId })
-      .populate("user", "userName email address profileImage isOnline")
+      .populate("user", "userName email address profileImage isOnline isVerified")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

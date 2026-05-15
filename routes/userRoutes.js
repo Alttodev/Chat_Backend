@@ -92,6 +92,7 @@ router.get("/me", auth, async (req, res) => {
         address: profile.address,
         memberSince: profile.createdAt,
         lastUpdated: profile.updatedAt,
+        isVerified:profile.isVerified,
         id: profile._id,
       },
     });
@@ -119,6 +120,7 @@ router.get("/userProfiles", auth, async (req, res) => {
       lastUpdated: profile.updatedAt,
       id: profile._id,
       userId: profile.userId,
+      isVerified: profile.isVerified,
     }));
 
     res.status(200).json({
@@ -198,6 +200,7 @@ router.get("/search", auth, async (req, res) => {
       memberSince: profile.createdAt,
       lastUpdated: profile.updatedAt,
       id: profile._id,
+      isVerified: profile.isVerified,
     }));
 
     res.status(200).json({

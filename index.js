@@ -16,6 +16,7 @@ const notificationRouter = require("./routes/notificationRoutes");
 // const jitsiRouter = require("./routes/JitsiRoutes");
 const statusRouter = require("./routes/statusRoutes");
 const profileviewRouter = require("./routes/profileViewsRoutes");
+const verificationRoutes = require("./routes/verificationRoutes");
 
 const { profile } = require("console");
 
@@ -60,6 +61,7 @@ app.use("/notifications", notificationRouter);
 // app.use("/jitsi", jitsiRouter);
 app.use("/status", statusRouter);
 app.use("/profileviews", profileviewRouter);
+app.use("/verification", verificationRoutes);
 
 const port = 4000;
 server.listen(port, async () => {

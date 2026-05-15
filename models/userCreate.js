@@ -20,6 +20,15 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
 
   isOnline: {
     type: Boolean,
