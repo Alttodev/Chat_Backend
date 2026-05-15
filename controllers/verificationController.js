@@ -3,15 +3,25 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-};
+// const createTransporter = () => {
+//   return nodemailer.createTransport({
+//     service: "gmail",
+//     auth: {
+//       user: process.env.EMAIL_USER,
+//       pass: process.env.EMAIL_PASSWORD,
+//     },
+//   });
+// };
+
+const createTransporter = nodemailer.createTransport({
+  host: process.env.BREVO_SMTP_HOST,
+  port: Number(process.env.BREVO_SMTP_PORT),
+  secure: false,
+  auth: {
+    user: process.env.BREVO_SMTP_USER,
+    pass: process.env.BREVO_SMTP_PASS,
+  },
+});
 
 const requestVerification = async (req, res) => {
   try {
@@ -39,7 +49,7 @@ const requestVerification = async (req, res) => {
       process.env.JWT_SECRET,
       {
         expiresIn: "30m",
-      }
+      },
     );
 
     const verifyURL = `${process.env.FRONTEND_URL}/verify-account?token=${token}`;
@@ -48,7 +58,7 @@ const requestVerification = async (req, res) => {
     await transporter.verify();
 
     await transporter.sendMail({
-      from: `"Clix" <${process.env.EMAIL_USER}>`,
+      from: `"Clix" <${process.env.BREVO_SMTP_USER}>`,
       to: user.email,
       subject: "Verify Your Account",
       html: `
@@ -128,7 +138,6 @@ const verifyAccount = async (req, res) => {
       user,
     });
   } catch (error) {
-  
     return res.status(400).json({
       success: false,
       message: "Invalid or expired token",
