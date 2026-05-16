@@ -1,29 +1,9 @@
 const User = require("../models/userCreate");
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 require("dotenv").config();
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-};
-
-// const createTransporter = () => {
-//   return nodemailer.createTransport({
-//     host: process.env.BREVO_SMTP_HOST,
-//     port: Number(process.env.BREVO_SMTP_PORT),
-//     secure: false,
-//     auth: {
-//       user: process.env.BREVO_SMTP_USER,
-//       pass: process.env.BREVO_SMTP_PASS,
-//     },
-//   });
-// };
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const requestVerification = async (req, res) => {
   try {
@@ -51,16 +31,13 @@ const requestVerification = async (req, res) => {
       process.env.JWT_SECRET,
       {
         expiresIn: "30m",
-      },
+      }
     );
 
     const verifyURL = `${process.env.FRONTEND_URL}/verify-account?token=${token}`;
 
-    const transporter = createTransporter();
-    await transporter.verify();
-
-    await transporter.sendMail({
-      from: `"Clix" <${process.env.EMAIL_USER}>`,
+    const { data, error } = await resend.emails.send({
+      from: "Clix <noreply@clixapp.site>",
       to: user.email,
       subject: "Verify Your Account",
       html: `
@@ -87,9 +64,18 @@ const requestVerification = async (req, res) => {
       `,
     });
 
+    if (error) {
+      console.error("Resend error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification email",
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Verification email sent",
+      emailId: data?.id,
     });
   } catch (error) {
     console.error("Request verification error:", error);
