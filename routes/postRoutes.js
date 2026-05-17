@@ -3,6 +3,7 @@ const router = express.Router();
 const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const User = require("../models/userCreate");
+const FollowRequest = require("../models/followRequest");
 const {
   mediaUpload,
   ensureVideoDuration,
@@ -39,10 +40,7 @@ const buildLikedUsers = async (likedBy = []) => {
   }
 
   const likedUsersDocs = await User.find({
-    $or: [
-      { _id: { $in: likedUserIds } },
-      { userId: { $in: likedUserIds } },
-    ],
+    $or: [{ _id: { $in: likedUserIds } }, { userId: { $in: likedUserIds } }],
   }).select("userName email profileImage address isOnline userId");
 
   const userLookup = new Map();
@@ -192,10 +190,90 @@ router.get("/list", auth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 5;
     const skip = (page - 1) * limit;
 
-    const totalPosts = await Post.countDocuments();
+    const currentUser = await User.findOne({ userId: req.user.id });
 
-    const posts = await Post.find()
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
+    const friends = await FollowRequest.find({
+      status: "accepted",
+      isFriends: true,
+      isDeleted: true,
+      from: currentUser._id,
+    });
+
+    const friendUserIds = friends
+      .map((item) => item.to?.toString())
+      .filter(Boolean);
+
+    const allowedUserIds = [...new Set([...friendUserIds, currentUserId])];
+
+    const totalPosts = await Post.countDocuments({
+      user: { $in: allowedUserIds },
+    });
+
+    const posts = await Post.find({
+      user: { $in: allowedUserIds },
+    })
       .populate("user", "userName email profileImage isVerified")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const likedUsersByPost = await Promise.all(
+      posts.map((post) => buildLikedUsers(post.likedBy)),
+    );
+
+    const postsWithExtra = posts.map((post, index) => {
+      const likedByIds = post.likedBy.map(getLikeUserId);
+
+      return {
+        ...post.toObject(),
+        likedByUsers: likedUsersByPost[index],
+        likedByMe: likedByIds.some(
+          (userId) => userId === currentUserId || userId === authUserId,
+        ),
+        isOwner: post.user && post.user._id.toString() === currentUserId,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Posts fetched successfully",
+      posts: postsWithExtra,
+      nextPage: page + 1,
+      totalPages: Math.ceil(totalPosts / limit),
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+router.get("/list/:id", auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const skip = (page - 1) * limit;
+
+    const userId = req.params.id;
+
+    const totalPosts = await Post.countDocuments({ user: userId });
+
+    const posts = await Post.find({ user: userId })
+      .populate(
+        "user",
+        "userName email address profileImage isOnline isVerified",
+      )
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -214,71 +292,17 @@ router.get("/list", auth, async (req, res) => {
       posts.map((post) => buildLikedUsers(post.likedBy)),
     );
 
-    const postsWithExtra = posts.map((post, index) => {
-      const likedByIds = post.likedBy.map(getLikeUserId);
-      return {
-        ...post.toObject(),
-        likedByUsers: likedUsersByPost[index],
-        likedByMe: likedByIds.some(
-          (userId) => userId === currentUserId || userId === authUserId,
-        ),
-        isOwner:
-          post.user && post.user._id.toString() === currentUser._id.toString(),
-      };
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Posts fetched successfully",
-      posts: postsWithExtra,
-      nextPage: page + 1,
-      totalPages: Math.ceil(totalPosts / limit),
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
-
-router.get("/list/:id", auth, async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    const skip = (page - 1) * limit;
-
-    const userId = req.params.id;
-
-    const totalPosts = await Post.countDocuments({ user: userId });
-
-    const posts = await Post.find({ user: userId })
-      .populate("user", "userName email address profileImage isOnline isVerified")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const currentUser = await User.findOne({ userId: req.user.id });
-
-    if (!currentUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    const currentUserId = currentUser._id.toString();
-    const authUserId = req.user.id.toString();
-     const likedUsersByPost = await Promise.all(
-      posts.map((post) => buildLikedUsers(post.likedBy)),
-    );
-
     const userDetails = await User.findOne({ _id: userId });
 
-    const postsWithExtra = posts.map((post,index) => {
+    const postsWithExtra = posts.map((post, index) => {
       const { user, ...rest } = post.toObject();
       const likedByIds = post.likedBy.map(getLikeUserId);
       return {
         ...rest,
-         likedByUsers: likedUsersByPost[index],
+        likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
-          (likedUserId) => likedUserId === currentUserId || likedUserId === authUserId,
+          (likedUserId) =>
+            likedUserId === currentUserId || likedUserId === authUserId,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
       };
@@ -355,10 +379,7 @@ router.get("/:id/liked-users", auth, async (req, res) => {
     const likedUserIds = likeRecords.map((like) => like.userId);
 
     const likedUsersDocs = await User.find({
-      $or: [
-        { _id: { $in: likedUserIds } },
-        { userId: { $in: likedUserIds } },
-      ],
+      $or: [{ _id: { $in: likedUserIds } }, { userId: { $in: likedUserIds } }],
     }).select("userName email profileImage address isOnline userId");
 
     const userLookup = new Map();
