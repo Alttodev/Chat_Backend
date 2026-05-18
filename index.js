@@ -17,7 +17,7 @@ const notificationRouter = require("./routes/notificationRoutes");
 const statusRouter = require("./routes/statusRoutes");
 const profileviewRouter = require("./routes/profileViewsRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
-const publicRouter= require("./routes/PublicRoute");
+const publicRouter= require("./routes/publicRoutes");
 
 const { profile } = require("console");
 
