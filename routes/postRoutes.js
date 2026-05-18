@@ -202,15 +202,33 @@ router.get("/list", auth, async (req, res) => {
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
 
-    // get all public users
-    const publicUsers = await User.find({
-      isPublic: true,
-    }).select("_id");
-
+    // Public users
+    const publicUsers = await User.find({ isPublic: true }).select("_id");
     const publicUserIds = publicUsers.map((user) => user._id.toString());
 
-    // show public users' posts + current user's own posts
-    const allowedUserIds = [...new Set([...publicUserIds, currentUserId])];
+    // Active accepted relations for current user
+    const relations = await FollowRequest.find({
+      status: "accepted",
+      isFriends: true,
+      $or: [{ from: currentUser._id }, { to: currentUser._id }],
+    }).select("from to");
+
+    // Get the other user in each relation
+    const relatedUserIds = relations
+      .map((item) => {
+        const fromId = item.from.toString();
+        const toId = item.to.toString();
+
+        if (fromId === currentUserId) return toId;
+        if (toId === currentUserId) return fromId;
+        return null;
+      })
+      .filter(Boolean);
+
+    // Public users + related users + own posts
+    const allowedUserIds = [
+      ...new Set([...publicUserIds, ...relatedUserIds, currentUserId]),
+    ];
 
     const totalPosts = await Post.countDocuments({
       user: { $in: allowedUserIds },

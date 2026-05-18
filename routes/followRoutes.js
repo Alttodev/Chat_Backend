@@ -291,7 +291,7 @@ module.exports = (io) => {
         from: user._id,
         status: "accepted",
       })
-        .populate("to", "userName email address profileImage isOnline")
+        .populate("to", "userName email address profileImage isOnline isVerified")
         .populate("from", "userName email address isOnline")
         .sort({ createdAt: -1 });
 
