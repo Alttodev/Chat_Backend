@@ -15,6 +15,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  isPublic: {
+    type: Boolean,
+    default: false,
+  },
   address: String,
   profileImage: {
     type: String,

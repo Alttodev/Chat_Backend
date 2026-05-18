@@ -202,18 +202,15 @@ router.get("/list", auth, async (req, res) => {
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
 
-    const friends = await FollowRequest.find({
-      status: "accepted",
-      isFriends: true,
-      isDeleted: true,
-      from: currentUser._id,
-    });
+    // get all public users
+    const publicUsers = await User.find({
+      isPublic: true,
+    }).select("_id");
 
-    const friendUserIds = friends
-      .map((item) => item.to?.toString())
-      .filter(Boolean);
+    const publicUserIds = publicUsers.map((user) => user._id.toString());
 
-    const allowedUserIds = [...new Set([...friendUserIds, currentUserId])];
+    // show public users' posts + current user's own posts
+    const allowedUserIds = [...new Set([...publicUserIds, currentUserId])];
 
     const totalPosts = await Post.countDocuments({
       user: { $in: allowedUserIds },
@@ -222,13 +219,13 @@ router.get("/list", auth, async (req, res) => {
     const posts = await Post.find({
       user: { $in: allowedUserIds },
     })
-      .populate("user", "userName email profileImage isVerified")
+      .populate("user", "userName email profileImage isVerified isPublic")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
     const likedUsersByPost = await Promise.all(
-      posts.map((post) => buildLikedUsers(post.likedBy)),
+      posts.map((post) => buildLikedUsers(post.likedBy))
     );
 
     const postsWithExtra = posts.map((post, index) => {
@@ -238,7 +235,7 @@ router.get("/list", auth, async (req, res) => {
         ...post.toObject(),
         likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
-          (userId) => userId === currentUserId || userId === authUserId,
+          (userId) => userId === currentUserId || userId === authUserId
         ),
         isOwner: post.user && post.user._id.toString() === currentUserId,
       };
@@ -272,7 +269,7 @@ router.get("/list/:id", auth, async (req, res) => {
     const posts = await Post.find({ user: userId })
       .populate(
         "user",
-        "userName email address profileImage isOnline isVerified",
+        "userName email address profileImage isOnline isVerified isPublic",
       )
       .sort({ createdAt: -1 })
       .skip(skip)
