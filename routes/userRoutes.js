@@ -92,7 +92,8 @@ router.get("/me", auth, async (req, res) => {
         address: profile.address,
         memberSince: profile.createdAt,
         lastUpdated: profile.updatedAt,
-        isVerified:profile.isVerified,
+        isVerified: profile.isVerified,
+        isPublic:profile.isPublic,
         id: profile._id,
       },
     });
