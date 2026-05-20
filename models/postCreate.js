@@ -16,31 +16,58 @@ const CommentSchema = new mongoose.Schema({
   },
 });
 
+const LikeSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user",
+    required: true,
+  },
+
+  type: {
+    type: String,
+    enum: ["love", "haha", "wow", "sad"],
+    default: "love",
+  },
+
+  likedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
 const PostSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "user",
     required: true,
   },
+
   postText: {
     type: String,
     required: true,
   },
-  image: { type: String },
+
+  image: {
+    type: String,
+  },
+
   likes: {
     type: Number,
     default: 0,
   },
+
   likedBy: {
-    type: [mongoose.Schema.Types.Mixed],
+    type: [LikeSchema],
     default: [],
   },
+
   comments: [CommentSchema],
 
   createdAt: {
     type: Date,
     default: Date.now,
   },
+
   updatedAt: {
     type: Date,
     default: Date.now,
