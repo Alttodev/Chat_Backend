@@ -218,7 +218,8 @@ router.get("/list", auth, async (req, res) => {
         ...post.toObject(),
         likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
-          (userId) => userId === currentUserId || userId === authUserId,
+          (userId) =>
+            userId.toString() === currentUserId || userId === authUserId,
         ),
         isOwner: post.user && post.user._id.toString() === currentUserId,
       };
@@ -360,10 +361,7 @@ router.get("/:id/liked-users", auth, async (req, res) => {
     const likedUserIds = likeRecords.map((like) => like.userId);
 
     const likedUsersDocs = await User.find({
-      $or: [
-        { _id: { $in: likedUserIds } },
-        { userId: { $in: likedUserIds } },
-      ],
+      $or: [{ _id: { $in: likedUserIds } }, { userId: { $in: likedUserIds } }],
     }).select("userName email profileImage address isOnline userId");
 
     const userLookup = new Map();
