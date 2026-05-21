@@ -6,6 +6,31 @@ const CommentSchema = new mongoose.Schema({
     ref: "user",
     required: true,
   },
+  reactions: {
+    type: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "user",
+          required: true,
+        },
+        type: {
+          type: String,
+          enum: ["like", "dislike"],
+          required: true,
+        },
+        reactedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    default: [],
+  },
+  parentComment: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+  },
   comment: {
     type: String,
     required: true,
