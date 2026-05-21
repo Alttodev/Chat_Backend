@@ -25,7 +25,7 @@ const LikeSchema = new mongoose.Schema({
 
   type: {
     type: String,
-    enum: ["love","clap", "haha", "wow", "sad"],
+    enum: ["love","fire","clap", "haha", "wow", "sad"],
     default: "love",
   },
 

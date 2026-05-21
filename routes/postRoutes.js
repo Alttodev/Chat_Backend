@@ -179,7 +179,6 @@ router.get("/list", auth, async (req, res) => {
     const publicUsers = await User.find({ isPublic: true }).select("_id");
     const publicUserIds = publicUsers.map((user) => user._id.toString());
 
-    // Only people current user followed
     const relations = await FollowRequest.find({
       status: "accepted",
       isFriends: true,
@@ -212,15 +211,29 @@ router.get("/list", auth, async (req, res) => {
     );
 
     const postsWithExtra = posts.map((post, index) => {
-      const likedByIds = post.likedBy.map(getLikeUserId);
+      const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
+        .map(getLikeUserId)
+        .filter(Boolean);
+
+      const myReactionData = (
+        Array.isArray(post.likedBy) ? post.likedBy : []
+      ).find((item) => {
+        const userId = getLikeUserId(item);
+        return (
+          userId?.toString() === currentUserId ||
+          userId?.toString() === authUserId
+        );
+      });
 
       return {
         ...post.toObject(),
         likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
           (userId) =>
-            userId.toString() === currentUserId || userId === authUserId,
+            userId?.toString() === currentUserId ||
+            userId?.toString() === authUserId,
         ),
+        myReaction: myReactionData?.type || null,
         isOwner: post.user && post.user._id.toString() === currentUserId,
       };
     });
@@ -277,14 +290,24 @@ router.get("/list/:id", auth, async (req, res) => {
     const postsWithExtra = posts.map((post, index) => {
       const { user, ...rest } = post.toObject();
       const likedByIds = post.likedBy.map(getLikeUserId);
+      const myReactionData = (
+        Array.isArray(post.likedBy) ? post.likedBy : []
+      ).find((item) => {
+        const userId = getLikeUserId(item);
+        return (
+          userId?.toString() === currentUserId ||
+          userId?.toString() === authUserId
+        );
+      });
       return {
         ...rest,
         likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
           (likedUserId) =>
-            likedUserId === currentUserId || likedUserId === authUserId,
+            likedUserId.toString() === currentUserId || likedUserId === authUserId,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
+        myReaction: myReactionData?.type || null,
       };
     });
 
