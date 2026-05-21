@@ -385,7 +385,7 @@ router.get("/:id/liked-users", auth, async (req, res) => {
 
     const likedUsersDocs = await User.find({
       $or: [{ _id: { $in: likedUserIds } }, { userId: { $in: likedUserIds } }],
-    }).select("userName email profileImage address isOnline userId");
+    }).select("userName email profileImage address isOnline isVerified userId");
 
     const userLookup = new Map();
     likedUsersDocs.forEach((user) => {
@@ -406,6 +406,7 @@ router.get("/:id/liked-users", auth, async (req, res) => {
           profileImage: user.profileImage,
           address: user.address,
           isOnline: user.isOnline,
+          isVerified:user.isVerified,
           likedAt: like.likedAt,
           type: like.type,
         };
