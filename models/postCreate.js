@@ -50,8 +50,8 @@ const LikeSchema = new mongoose.Schema({
 
   type: {
     type: String,
-    enum: ["love","fire","clap", "haha", "wow", "sad"],
-    default: "love",
+    enum: ["like", "dislike"],
+    default: "like",
   },
 
   likedAt: {

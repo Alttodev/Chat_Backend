@@ -233,7 +233,7 @@ router.get("/list", auth, async (req, res) => {
             userId?.toString() === currentUserId ||
             userId?.toString() === authUserId,
         ),
-        myReaction: myReactionData?.type || null,
+        myReaction: myReactionData ? "like" : null,
         isOwner: post.user && post.user._id.toString() === currentUserId,
       };
     });
@@ -307,7 +307,7 @@ router.get("/list/:id", auth, async (req, res) => {
             likedUserId.toString() === currentUserId || likedUserId === authUserId,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
-        myReaction: myReactionData?.type || null,
+        myReaction: myReactionData ? "like" : null,
       };
     });
 
@@ -377,7 +377,7 @@ router.get("/:id/liked-users", auth, async (req, res) => {
       .map((like) => ({
         userId: getLikeUserId(like),
         likedAt: getLikeTimestamp(like),
-        type: like?.type || "love",
+        type: "like",
       }))
       .filter((like) => like.userId);
 
@@ -430,7 +430,6 @@ router.get("/:id/liked-users", auth, async (req, res) => {
 //like post
 router.post("/:id/like", auth, async (req, res) => {
   try {
-    const { type } = req.body;
     const post = await Post.findById(req.params.id);
 
     if (!post) {
@@ -457,17 +456,12 @@ router.post("/:id/like", auth, async (req, res) => {
       (item) => String(item.user) === currentUserId,
     );
 
-    if (!type) {
-      if (existingIndex !== -1) {
-        post.likedBy.splice(existingIndex, 1);
-      }
-    } else if (existingIndex !== -1) {
-      post.likedBy[existingIndex].type = type;
-      post.likedBy[existingIndex].likedAt = new Date();
+    if (existingIndex !== -1) {
+      post.likedBy.splice(existingIndex, 1);
     } else {
       post.likedBy.push({
         user: currentUser._id,
-        type,
+        type: "like",
         likedAt: new Date(),
       });
     }
@@ -476,13 +470,13 @@ router.post("/:id/like", auth, async (req, res) => {
 
     await post.save();
 
-    return res.json({
+      return res.json({
       success: true,
       likes: post.likes,
       likedBy: post.likedBy,
-      myReaction:
-        post.likedBy.find((item) => String(item.user) === currentUserId)
-          ?.type || null,
+      myReaction: post.likedBy.find((item) => String(item.user) === currentUserId)
+        ? "like"
+        : null,
     });
   } catch (err) {
     console.error("LIKE ERROR:", err);
