@@ -7,6 +7,24 @@ const { sendPushToUser } = require("../utils/pushNotifications");
 module.exports = (io) => {
   const router = express.Router();
 
+  const relationFields =
+    "userName email address profileImage isOnline isVerified userId";
+
+  const formatUser = (user) => {
+    if (!user) return null;
+
+    return {
+      id: user._id,
+      userId: user.userId,
+      userName: user.userName,
+      email: user.email,
+      address: user.address,
+      profileImage: user.profileImage,
+      isOnline: user.isOnline,
+      isVerified: user.isVerified,
+    };
+  };
+
   router.post("/send/:id", auth, async (req, res) => {
     try {
       const user = await User.findOne({ userId: req.user.id });
@@ -217,6 +235,155 @@ module.exports = (io) => {
         .status(201)
         .json({ success: true, message: "Unfollowed successfully" });
     } catch (err) {
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
+
+ 
+
+  router.get("/connections/recommended", auth, async (req, res) => {
+    try {
+      const currentUser = await User.findOne({ userId: req.user.id });
+
+      if (!currentUser) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      const [outgoingFriends, incomingFriends] = await Promise.all([
+        FollowRequest.find({
+          from: currentUser._id,
+          status: "accepted",
+          isFriends: true,
+        }).populate("to", relationFields),
+        FollowRequest.find({
+          to: currentUser._id,
+          status: "accepted",
+          isFriends: true,
+        }).populate("from", relationFields),
+      ]);
+
+      const currentUserId = currentUser._id.toString();
+
+      const outgoingIds = new Set(
+        outgoingFriends
+          .map((request) => request.to?._id?.toString())
+          .filter(Boolean),
+      );
+
+      const incomingIds = new Set(
+        incomingFriends
+          .map((request) => request.from?._id?.toString())
+          .filter(Boolean),
+      );
+
+      const mutualFriendIds = new Set(
+        [...outgoingIds].filter((userId) => incomingIds.has(userId)),
+      );
+
+      const mutualFriends = outgoingFriends
+        .filter((request) => {
+          const targetId = request.to?._id?.toString();
+          return targetId && mutualFriendIds.has(targetId);
+        })
+        .map((request) => formatUser(request.to))
+        .filter(Boolean);
+
+      const sourceFriendIds = [...new Set([...outgoingIds, ...incomingIds])];
+
+      if (sourceFriendIds.length === 0) {
+        return res.json({
+          success: true,
+          message: "Recommended connections listed successfully",
+          count: 0,
+          suggestions: [],
+          mutualFriends,
+        });
+      }
+
+      const friendFollowings = await FollowRequest.find({
+        from: { $in: sourceFriendIds },
+        status: "accepted",
+        isFriends: true,
+      })
+        .populate("from", relationFields)
+        .populate("to", relationFields);
+
+      const alreadyFollowingIds = new Set(outgoingIds);
+      const alreadyConnectedIds = new Set([
+        ...outgoingIds,
+        ...incomingIds,
+        currentUserId,
+      ]);
+
+      const suggestionsMap = new Map();
+
+      friendFollowings.forEach((request) => {
+        const target = request.to;
+        const friend = request.from;
+
+        if (!target || !friend) return;
+
+        const targetId = target._id.toString();
+
+        if (alreadyConnectedIds.has(targetId)) return;
+        if (mutualFriendIds.has(targetId)) return;
+        if (alreadyFollowingIds.has(targetId)) return;
+
+        const existing = suggestionsMap.get(targetId);
+
+        const friendSummary = formatUser(friend);
+        const targetSummary = formatUser(target);
+
+        if (!existing) {
+          suggestionsMap.set(targetId, {
+            ...targetSummary,
+            canAdd: true,
+            suggestedByFriends: [friendSummary],
+            suggestedByFriendNames: friendSummary?.userName ? [friendSummary.userName] : [],
+          });
+          return;
+        }
+
+        const friendAlreadyAdded = existing.suggestedByFriends.some(
+          (item) => item.id?.toString() === friendSummary?.id?.toString(),
+        );
+
+        if (!friendAlreadyAdded && friendSummary) {
+          existing.suggestedByFriends.push(friendSummary);
+          if (friendSummary.userName) {
+            existing.suggestedByFriendNames.push(friendSummary.userName);
+          }
+        }
+      });
+
+      const suggestions = Array.from(suggestionsMap.values())
+        .map((item) => ({
+          ...item,
+          mutualFriendCount: item.suggestedByFriends.length,
+        }))
+        .sort(
+          (a, b) =>
+            b.mutualFriendCount - a.mutualFriendCount ||
+            a.userName.localeCompare(b.userName),
+        );
+
+      const commonSuggestions = suggestions.filter(
+        (item) => item.mutualFriendCount > 1,
+      );
+
+      res.json({
+        success: true,
+        message: "Recommended connections listed successfully",
+        count: suggestions.length,
+        mutualFriends,
+        sourceFriendCount: sourceFriendIds.length,
+        suggestions,
+        commonSuggestions,
+      });
+    } catch (err) {
+      console.error(err);
       res.status(500).json({ success: false, message: "Server error" });
     }
   });
