@@ -25,21 +25,44 @@ const getLikeTimestamp = (like) => {
 };
 
 const buildLikedUsers = async (likedBy = []) => {
-  const ids = likedBy.map(getLikeUserId).filter(Boolean);
+  const likeRecords = (Array.isArray(likedBy) ? likedBy : [])
+    .map((like) => ({
+      userId: getLikeUserId(like),
+      likedAt: getLikeTimestamp(like),
+      type: like?.type || "like",
+    }))
+    .filter((like) => like.userId);
 
-  if (!ids.length) return [];
+  if (!likeRecords.length) return [];
+
+  const likedUserIds = likeRecords.map((like) => like.userId);
 
   const users = await User.find({
-    _id: { $in: ids },
+    $or: [{ _id: { $in: likedUserIds } }, { userId: { $in: likedUserIds } }],
   }).select("userName profileImage userId isVerified");
 
-  return users.map((user) => ({
-    id: user._id,
-    userId: user.userId,
-    userName: user.userName,
-    profileImage: user.profileImage,
-    isVerified: user.isVerified,
-  }));
+  const userLookup = new Map();
+  users.forEach((user) => {
+    userLookup.set(user._id.toString(), user);
+    userLookup.set(user.userId.toString(), user);
+  });
+
+  return likeRecords
+    .map((like) => {
+      const user = userLookup.get(String(like.userId));
+      if (!user) return null;
+
+      return {
+        id: user._id,
+        userId: user.userId,
+        userName: user.userName,
+        profileImage: user.profileImage,
+        isVerified: user.isVerified,
+        likedAt: like.likedAt,
+        type: like.type,
+      };
+    })
+    .filter(Boolean);
 };
 
 // Create Post

@@ -302,15 +302,24 @@ module.exports = (io) => {
         });
       }
 
+      const currentUserRelations = await FollowRequest.find({
+        from: currentUser._id,
+        status: { $ne: "declined" },
+      }).select("to");
+
+      const currentUserFollowingIds = new Set(
+        currentUserRelations
+          .map((request) => request.to?.toString())
+          .filter(Boolean),
+      );
+
       const friendFollowings = await FollowRequest.find({
         from: { $in: sourceFriendIds },
-        status: "accepted",
-        isFriends: true,
+        status: { $ne: "declined" },
       })
         .populate("from", relationFields)
         .populate("to", relationFields);
 
-      const alreadyFollowingIds = new Set(outgoingIds);
       const alreadyConnectedIds = new Set([
         ...outgoingIds,
         ...incomingIds,
@@ -329,12 +338,14 @@ module.exports = (io) => {
 
         if (alreadyConnectedIds.has(targetId)) return;
         if (mutualFriendIds.has(targetId)) return;
-        if (alreadyFollowingIds.has(targetId)) return;
+        if (currentUserFollowingIds.has(targetId)) return;
 
         const existing = suggestionsMap.get(targetId);
 
         const friendSummary = formatUser(friend);
         const targetSummary = formatUser(target);
+
+        if (!friendSummary || !targetSummary) return;
 
         if (!existing) {
           suggestionsMap.set(targetId, {
@@ -366,12 +377,35 @@ module.exports = (io) => {
         .sort(
           (a, b) =>
             b.mutualFriendCount - a.mutualFriendCount ||
-            a.userName.localeCompare(b.userName),
+            (a.userName || "").localeCompare(b.userName || ""),
         );
 
-      const commonSuggestions = suggestions.filter(
-        (item) => item.mutualFriendCount > 1,
-      );
+      const unfollowedUsers = await User.find({
+        _id: { $nin: [currentUser._id, ...Array.from(currentUserFollowingIds)] },
+      }).select(relationFields);
+
+      const commonSuggestions = unfollowedUsers
+        .map((user) => {
+          const userSummary = formatUser(user);
+          if (!userSummary) return null;
+
+          const existingSuggestion = suggestionsMap.get(user._id.toString());
+
+          return {
+            ...userSummary,
+            canAdd: true,
+            suggestedByFriends: existingSuggestion?.suggestedByFriends || [],
+            suggestedByFriendNames:
+              existingSuggestion?.suggestedByFriendNames || [],
+            mutualFriendCount: existingSuggestion?.suggestedByFriends?.length || 0,
+          };
+        })
+        .filter(Boolean)
+        .sort(
+          (a, b) =>
+            b.mutualFriendCount - a.mutualFriendCount ||
+            (a.userName || "").localeCompare(b.userName || ""),
+        );
 
       res.json({
         success: true,
