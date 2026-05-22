@@ -19,7 +19,7 @@ router.get("/seens", auth, async (req, res) => {
       viewedUser: user._id,
     })
       .sort({ viewedAt: -1 })
-      .populate("viewer", "userName profileImage isOnline lastSeen")
+      .populate("viewer", "userName profileImage isOnline isVerified lastSeen")
       .lean();
 
     const viewers = profileViews.map((view) => ({
