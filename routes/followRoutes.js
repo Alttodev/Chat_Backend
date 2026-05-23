@@ -239,8 +239,6 @@ module.exports = (io) => {
     }
   });
 
- 
-
   router.get("/connections/recommended", auth, async (req, res) => {
     try {
       const currentUser = await User.findOne({ userId: req.user.id });
@@ -292,16 +290,6 @@ module.exports = (io) => {
 
       const sourceFriendIds = [...new Set([...outgoingIds, ...incomingIds])];
 
-      if (sourceFriendIds.length === 0) {
-        return res.json({
-          success: true,
-          message: "Recommended connections listed successfully",
-          count: 0,
-          suggestions: [],
-          mutualFriends,
-        });
-      }
-
       const currentUserRelations = await FollowRequest.find({
         from: currentUser._id,
         status: { $ne: "declined" },
@@ -312,6 +300,44 @@ module.exports = (io) => {
           .map((request) => request.to?.toString())
           .filter(Boolean),
       );
+
+      const unfollowedUsers = await User.find({
+        _id: {
+          $nin: [currentUser._id, ...Array.from(currentUserFollowingIds)],
+        },
+      }).select(relationFields);
+
+      const buildCommonSuggestions = () => {
+        return unfollowedUsers
+          .map((user) => {
+            const userSummary = formatUser(user);
+            if (!userSummary) return null;
+
+            return {
+              ...userSummary,
+              canAdd: true,
+              suggestedByFriends: [],
+              suggestedByFriendNames: [],
+              mutualFriendCount: 0,
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => (a.userName || "").localeCompare(b.userName || ""));
+      };
+
+      if (sourceFriendIds.length === 0) {
+        const commonSuggestions = buildCommonSuggestions();
+
+        return res.json({
+          success: true,
+          message: "Recommended connections listed successfully",
+          count: commonSuggestions.length,
+          mutualFriends: [],
+          sourceFriendCount: 0,
+          suggestions: commonSuggestions,
+          commonSuggestions,
+        });
+      }
 
       const friendFollowings = await FollowRequest.find({
         from: { $in: sourceFriendIds },
@@ -352,7 +378,9 @@ module.exports = (io) => {
             ...targetSummary,
             canAdd: true,
             suggestedByFriends: [friendSummary],
-            suggestedByFriendNames: friendSummary?.userName ? [friendSummary.userName] : [],
+            suggestedByFriendNames: friendSummary?.userName
+              ? [friendSummary.userName]
+              : [],
           });
           return;
         }
@@ -380,10 +408,6 @@ module.exports = (io) => {
             (a.userName || "").localeCompare(b.userName || ""),
         );
 
-      const unfollowedUsers = await User.find({
-        _id: { $nin: [currentUser._id, ...Array.from(currentUserFollowingIds)] },
-      }).select(relationFields);
-
       const commonSuggestions = unfollowedUsers
         .map((user) => {
           const userSummary = formatUser(user);
@@ -397,7 +421,8 @@ module.exports = (io) => {
             suggestedByFriends: existingSuggestion?.suggestedByFriends || [],
             suggestedByFriendNames:
               existingSuggestion?.suggestedByFriendNames || [],
-            mutualFriendCount: existingSuggestion?.suggestedByFriends?.length || 0,
+            mutualFriendCount:
+              existingSuggestion?.suggestedByFriends?.length || 0,
           };
         })
         .filter(Boolean)
@@ -407,7 +432,7 @@ module.exports = (io) => {
             (a.userName || "").localeCompare(b.userName || ""),
         );
 
-      res.json({
+      return res.json({
         success: true,
         message: "Recommended connections listed successfully",
         count: suggestions.length,
@@ -417,8 +442,7 @@ module.exports = (io) => {
         commonSuggestions,
       });
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ success: false, message: "Server error" });
+      return res.status(500).json({ success: false, message: "Server error" });
     }
   });
 
@@ -433,7 +457,10 @@ module.exports = (io) => {
       }
 
       const friends = await FollowRequest.find({ to: user._id })
-        .populate("from", "userName email address profileImage isOnline isVerified")
+        .populate(
+          "from",
+          "userName email address profileImage isOnline isVerified",
+        )
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
 
@@ -460,7 +487,10 @@ module.exports = (io) => {
       }
 
       const friends = await FollowRequest.find({ to: user._id })
-        .populate("from", "userName email address profileImage isOnline isVerified")
+        .populate(
+          "from",
+          "userName email address profileImage isOnline isVerified",
+        )
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
 
@@ -492,7 +522,10 @@ module.exports = (io) => {
         from: user._id,
         status: "accepted",
       })
-        .populate("to", "userName email address profileImage isOnline isVerified")
+        .populate(
+          "to",
+          "userName email address profileImage isOnline isVerified",
+        )
         .populate("from", "userName email address isOnline")
         .sort({ createdAt: -1 });
 
