@@ -12,7 +12,7 @@ router.post(
   auth,
   upload.single("profileImage"),
   async (req, res) => {
-    const { userName, email, address } = req.body;
+    const { userName, email, address, bio } = req.body;
 
     try {
       const userId = req.user.id;
@@ -28,6 +28,7 @@ router.post(
         email,
         address,
         profileImage,
+        bio,
       });
       await profile.save();
 
@@ -44,7 +45,7 @@ router.post(
 
 // Update profile
 router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
-  const { userName, email, address } = req.body;
+  const { userName, email, address, bio } = req.body;
 
   try {
     const userId = req.user.id;
@@ -60,7 +61,7 @@ router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
     if (req.file) {
       profile.profileImage = req.file.path;
     }
-
+    profile.bio = bio;
     await profile.save();
 
     res.status(200).json({
@@ -94,6 +95,7 @@ router.get("/me", auth, async (req, res) => {
         lastUpdated: profile.updatedAt,
         isVerified: profile.isVerified,
         isPublic:profile.isPublic,
+        bio: profile.bio,
         id: profile._id,
       },
     });

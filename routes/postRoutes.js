@@ -289,7 +289,7 @@ router.get("/list/:id", auth, async (req, res) => {
     const posts = await Post.find({ user: userId })
       .populate(
         "user",
-        "userName email address profileImage isOnline isVerified isPublic",
+        "userName email address profileImage isOnline isVerified  isPublic bio",
       )
       .sort({ createdAt: -1 })
       .skip(skip)

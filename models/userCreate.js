@@ -15,6 +15,12 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  bio: {
+  type: String,
+  trim: true,
+  maxlength: 150,
+  default: "",
+},
   isPublic: {
     type: Boolean,
     default: false,
