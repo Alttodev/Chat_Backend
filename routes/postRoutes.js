@@ -582,8 +582,6 @@ router.get("/:id/liked-users", auth, async (req, res) => {
 });
 
 //like post
-
-
 router.post("/:id/like", auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
@@ -595,7 +593,6 @@ router.post("/:id/like", auth, async (req, res) => {
     }
 
     const currentUser = await User.findOne({ userId: req.user.id });
-
     if (!currentUser) {
       return res
         .status(404)
@@ -604,6 +601,7 @@ router.post("/:id/like", auth, async (req, res) => {
 
     const currentUserId = currentUser._id.toString();
 
+    // add this here
     post.likedBy = Array.isArray(post.likedBy)
       ? post.likedBy.filter((item) => item?.user)
       : [];
@@ -612,53 +610,14 @@ router.post("/:id/like", auth, async (req, res) => {
       (item) => String(item.user) === currentUserId,
     );
 
-    const isAlreadyLiked = existingIndex !== -1;
-
-    if (isAlreadyLiked) {
+    if (existingIndex !== -1) {
       post.likedBy.splice(existingIndex, 1);
-
-      // optional: remove notification when unliked
-      await Notification.deleteOne({
-        type: "like",
-        from: currentUser._id,
-        to: post.user,
-        post: post._id,
-      });
     } else {
       post.likedBy.push({
         user: currentUser._id,
         type: "like",
         likedAt: new Date(),
       });
-
-      // don't notify if user likes their own post
-      if (String(post.user) !== String(currentUser._id)) {
-        await Notification.create({
-          type: "like",
-          from: currentUser._id,
-          to: post.user,
-          post: post._id,
-          comment: `${currentUser.userName} liked your post`,
-        });
-
-        // realtime notification if socket.io is available
-        const io = req.app.get("io");
-        if (io) {
-          io.to(String(post.user)).emit("notification:new", {
-            type: "like",
-            from: {
-              _id: currentUser._id,
-              userName: currentUser.userName,
-              profileImage: currentUser.profileImage,
-            },
-            to: post.user,
-            post: post._id,
-            comment: `${currentUser.userName} liked your post`,
-            isRead: false,
-            createdAt: new Date(),
-          });
-        }
-      }
     }
 
     post.likes = post.likedBy.length;
@@ -683,4 +642,5 @@ router.post("/:id/like", auth, async (req, res) => {
     });
   }
 });
+
 module.exports = router;
