@@ -577,7 +577,6 @@ module.exports = (io) => {
         totalFollowing,
       });
     } catch (err) {
-      console.error(err);
       res.status(500).json({ success: false, message: "Server error" });
     }
   });
@@ -621,7 +620,6 @@ module.exports = (io) => {
         totalFollowing,
       });
     } catch (err) {
-      console.error(err);
       res.status(500).json({ success: false, message: "Server error" });
     }
   });
