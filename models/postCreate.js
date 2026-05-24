@@ -31,6 +31,7 @@ const CommentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     default: null,
   },
+ 
   comment: {
     type: String,
     required: true,
@@ -75,6 +76,10 @@ const PostSchema = new mongoose.Schema({
   image: {
     type: String,
   },
+  hashtags: {
+  type: [String],
+  default: [],
+},
 
   likes: {
     type: Number,

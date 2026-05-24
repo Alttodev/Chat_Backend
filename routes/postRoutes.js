@@ -68,20 +68,28 @@ const buildLikedUsers = async (likedBy = []) => {
 // Create Post
 router.post("/create", auth, mediaUpload.single("image"), async (req, res) => {
   try {
-    const { postText } = req.body;
+    const { postText = "" } = req.body;
+
+    const hashtags =
+      postText
+        .match(/#(\w+)/g)
+        ?.map((tag) => tag.replace("#", "").toLowerCase()) || [];
 
     await ensureVideoDuration(req.file, 60);
 
     const user = await User.findOne({ userId: req.user.id });
-    if (!user)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     const post = new Post({
       postText,
       user: user._id,
       image: req.file ? req.file.path : null,
+      hashtags,
     });
 
     await post.save();
@@ -98,8 +106,11 @@ router.post("/create", auth, mediaUpload.single("image"), async (req, res) => {
         message: err.message,
       });
     }
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
@@ -109,14 +120,18 @@ router.put("/update/:id", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
 
     if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
+      });
     }
 
     const user = await User.findOne({ userId: req.user.id });
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
     if (post.user.toString() !== user._id.toString()) {
@@ -126,8 +141,15 @@ router.put("/update/:id", auth, async (req, res) => {
       });
     }
 
-    // update post text
-    post.postText = req.body.postText || post.postText;
+    const postText = req.body.postText || post.postText;
+
+    const hashtags =
+      postText
+        ?.match(/#(\w+)/g)
+        ?.map((tag) => tag.replace("#", "").toLowerCase()) || [];
+
+    post.postText = postText;
+    post.hashtags = hashtags;
 
     await post.save();
 
@@ -137,11 +159,9 @@ router.put("/update/:id", auth, async (req, res) => {
       post,
     });
   } catch (err) {
-    console.error("Error updating post:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
-
 // delete post
 
 router.delete("/delete/:id", auth, async (req, res) => {
@@ -276,6 +296,116 @@ router.get("/list", auth, async (req, res) => {
   }
 });
 
+//Hashtag Route
+
+router.get("/hashtags/:tag", auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const skip = (page - 1) * limit;
+
+    const tag = String(req.params.tag || "")
+      .toLowerCase()
+      .trim();
+    if (!tag) {
+      return res.status(400).json({
+        success: false,
+        message: "Hashtag is required",
+      });
+    }
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
+    const publicUsers = await User.find({ isPublic: true }).select("_id");
+    const publicUserIds = publicUsers.map((user) => user._id.toString());
+
+    const relations = await FollowRequest.find({
+      status: "accepted",
+      isFriends: true,
+      isDeleted: true,
+      from: currentUser._id,
+    }).select("to");
+
+    const relatedUserIds = relations
+      .map((item) => item.to?.toString())
+      .filter(Boolean);
+
+    const allowedUserIds = [
+      ...new Set([...publicUserIds, ...relatedUserIds, currentUserId]),
+    ];
+
+    const postFilter = {
+      user: { $in: allowedUserIds },
+      hashtags: tag,
+    };
+
+    const totalPosts = await Post.countDocuments(postFilter);
+
+    const posts = await Post.find(postFilter)
+      .populate("user", "userName email profileImage isVerified isPublic")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const likedUsersByPost = await Promise.all(
+      posts.map((post) => buildLikedUsers(post.likedBy)),
+    );
+
+    const postsWithExtra = posts.map((post, index) => {
+      const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
+        .map(getLikeUserId)
+        .filter(Boolean);
+
+      const myReactionData = (
+        Array.isArray(post.likedBy) ? post.likedBy : []
+      ).find((item) => {
+        const userId = getLikeUserId(item);
+        return (
+          userId?.toString() === currentUserId ||
+          userId?.toString() === authUserId
+        );
+      });
+
+      return {
+        ...post.toObject(),
+        likedByUsers: likedUsersByPost[index],
+        likedByMe: likedByIds.some(
+          (userId) =>
+            userId?.toString() === currentUserId ||
+            userId?.toString() === authUserId,
+        ),
+        myReaction: myReactionData ? "like" : null,
+        isOwner: post.user && post.user._id.toString() === currentUserId,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Hashtag posts fetched successfully",
+      tag,
+      posts: postsWithExtra,
+      nextPage: page + 1,
+      totalPages: Math.ceil(totalPosts / limit),
+      totalPosts,
+    });
+  } catch (err) {
+    console.error("Hashtag route error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 router.get("/list/:id", auth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -327,7 +457,8 @@ router.get("/list/:id", auth, async (req, res) => {
         likedByUsers: likedUsersByPost[index],
         likedByMe: likedByIds.some(
           (likedUserId) =>
-            likedUserId.toString() === currentUserId || likedUserId === authUserId,
+            likedUserId.toString() === currentUserId ||
+            likedUserId === authUserId,
         ),
         isOwner: user?._id.toString() === currentUser._id.toString(),
         myReaction: myReactionData ? "like" : null,
@@ -429,7 +560,7 @@ router.get("/:id/liked-users", auth, async (req, res) => {
           profileImage: user.profileImage,
           address: user.address,
           isOnline: user.isOnline,
-          isVerified:user.isVerified,
+          isVerified: user.isVerified,
           likedAt: like.likedAt,
           type: like.type,
         };
@@ -494,11 +625,13 @@ router.post("/:id/like", auth, async (req, res) => {
 
     await post.save();
 
-      return res.json({
+    return res.json({
       success: true,
       likes: post.likes,
       likedBy: post.likedBy,
-      myReaction: post.likedBy.find((item) => String(item.user) === currentUserId)
+      myReaction: post.likedBy.find(
+        (item) => String(item.user) === currentUserId,
+      )
         ? "like"
         : null,
     });
