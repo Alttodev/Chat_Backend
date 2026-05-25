@@ -45,7 +45,7 @@ router.post(
 
 // Update profile
 router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
-  const { userName, email, address, bio } = req.body;
+  const { userName, email, address, bio, profileImage } = req.body;
 
   try {
     const userId = req.user.id;
@@ -58,10 +58,21 @@ router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
     profile.userName = userName;
     profile.email = email;
     profile.address = address;
+    profile.bio = bio;
+
+    // If a new file is uploaded, use it
     if (req.file) {
       profile.profileImage = req.file.path;
     }
-    profile.bio = bio;
+    // If frontend explicitly sends null / remove signal, clear it
+    else if (
+      profileImage === "null" ||
+      profileImage === null ||
+      profileImage === ""
+    ) {
+      profile.profileImage = null;
+    }
+
     await profile.save();
 
     res.status(200).json({
@@ -94,7 +105,7 @@ router.get("/me", auth, async (req, res) => {
         memberSince: profile.createdAt,
         lastUpdated: profile.updatedAt,
         isVerified: profile.isVerified,
-        isPublic:profile.isPublic,
+        isPublic: profile.isPublic,
         bio: profile.bio,
         id: profile._id,
       },
@@ -288,7 +299,9 @@ router.post("/push-tokens", auth, async (req, res) => {
     const profile = await UserProfile.findOne({ userId: req.user.id });
 
     if (!profile) {
-      return res.status(404).json({ success: false, message: "Profile not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Profile not found" });
     }
 
     const existingTokenIndex = (profile.pushTokens || []).findIndex(
@@ -341,7 +354,9 @@ router.delete("/push-tokens", auth, async (req, res) => {
     );
 
     if (!profile) {
-      return res.status(404).json({ success: false, message: "Profile not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Profile not found" });
     }
 
     res.status(200).json({
@@ -354,6 +369,5 @@ router.delete("/push-tokens", auth, async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 });
-
 
 module.exports = router;
