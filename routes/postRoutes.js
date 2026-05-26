@@ -296,6 +296,114 @@ router.get("/list", auth, async (req, res) => {
   }
 });
 
+router.get("/videos", auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+
+    const skip = (page - 1) * limit;
+
+    const currentUser = await User.findOne({
+      userId: req.user.id,
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
+    const publicUsers = await User.find({
+      isPublic: true,
+    }).select("_id");
+
+    const publicUserIds = publicUsers.map((user) => user._id.toString());
+
+    const relations = await FollowRequest.find({
+      status: "accepted",
+      isFriends: true,
+      isDeleted: true,
+      from: currentUser._id,
+    }).select("to");
+
+    const relatedUserIds = relations
+      .map((item) => item.to?.toString())
+      .filter(Boolean);
+
+    const allowedUserIds = [
+      ...new Set([...publicUserIds, ...relatedUserIds, currentUserId]),
+    ];
+
+    const videoFilter = {
+      user: { $in: allowedUserIds },
+      image: {
+        $regex: /\.(mp4|mov|webm|mkv|avi)$/i,
+      },
+    };
+
+    const totalPosts = await Post.countDocuments(videoFilter);
+
+    const posts = await Post.find(videoFilter)
+      .populate("user", "userName email profileImage isVerified isPublic")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const likedUsersByPost = await Promise.all(
+      posts.map((post) => buildLikedUsers(post.likedBy)),
+    );
+
+    const postsWithExtra = posts.map((post, index) => {
+      const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
+        .map(getLikeUserId)
+        .filter(Boolean);
+
+      const myReactionData = (
+        Array.isArray(post.likedBy) ? post.likedBy : []
+      ).find((item) => {
+        const userId = getLikeUserId(item);
+
+        return (
+          userId?.toString() === currentUserId ||
+          userId?.toString() === authUserId
+        );
+      });
+
+      return {
+        ...post.toObject(),
+        likedByUsers: likedUsersByPost[index],
+        likedByMe: likedByIds.some(
+          (userId) =>
+            userId?.toString() === currentUserId ||
+            userId?.toString() === authUserId,
+        ),
+        myReaction: myReactionData ? "like" : null,
+        isOwner: post.user && post.user._id.toString() === currentUserId,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Video posts fetched successfully",
+      posts: postsWithExtra,
+      currentPage: page,
+      totalPages: Math.ceil(totalPosts / limit),
+      totalPosts,
+      limit,
+      hasMore: page < Math.ceil(totalPosts / limit),
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 //Hashtag Route
 
 router.get("/hashtags/:tag", auth, async (req, res) => {

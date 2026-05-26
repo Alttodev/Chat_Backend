@@ -448,75 +448,124 @@ module.exports = (io) => {
 
   router.get("/friends", auth, async (req, res) => {
     try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 10;
+
+      const skip = (page - 1) * limit;
+
       const user = await User.findOne({ userId: req.user.id });
 
       if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
       }
 
-      const friends = await FollowRequest.find({ to: user._id })
+      const filter = {
+        to: user._id,
+      };
+
+      const totalCount = await FollowRequest.countDocuments(filter);
+
+      const friends = await FollowRequest.find(filter)
         .populate(
           "from",
           "userName email address profileImage isOnline isVerified",
         )
         .populate("to", "userName email address isOnline")
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
 
       res.json({
         success: true,
-        count: friends.length,
         friends,
+        totalCount,
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        limit,
         message: "Friends Listed Successfully",
       });
     } catch (err) {
-      res.status(500).json({ success: false, message: "Server error" });
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
     }
   });
 
   router.get("/friends/:id", auth, async (req, res) => {
-    const id = req.params.id;
     try {
-      const user = await User.findOne({ _id: id });
+      const id = req.params.id;
+
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 5;
+
+      const skip = (page - 1) * limit;
+
+      const user = await User.findById(id);
 
       if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
       }
 
-      const friends = await FollowRequest.find({ to: user._id })
+      const filter = {
+        to: user._id,
+        status: "accepted",
+      };
+
+      const totalCount = await FollowRequest.countDocuments(filter);
+
+      const followers = await FollowRequest.find(filter)
         .populate(
           "from",
           "userName email address profileImage isOnline isVerified",
         )
         .populate("to", "userName email address isOnline")
-        .sort({ createdAt: -1 });
-
-      const totalFollowers = friends.filter((f) => f.status === "accepted");
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
 
       res.json({
         success: true,
-        totalFollowers,
         message: "Friends Listed Successfully",
+        totalFollowers: followers,
+        totalCount,
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        limit,
       });
     } catch (err) {
-      res.status(500).json({ success: false, message: "Server error" });
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
     }
   });
 
   router.get("/friends/following/:id", auth, async (req, res) => {
-    const id = req.params.id;
-
     try {
-      const user = await User.findOne({ _id: id });
+      const id = req.params.id;
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 5;
+      const skip = (page - 1) * limit;
+
+      const user = await User.findById(id);
 
       if (!user) {
         return res
           .status(404)
           .json({ success: false, message: "User not found" });
       }
+
+      const totalCount = await FollowRequest.countDocuments({
+        from: user._id,
+        status: "accepted",
+      });
 
       const following = await FollowRequest.find({
         from: user._id,
@@ -527,12 +576,18 @@ module.exports = (io) => {
           "userName email address profileImage isOnline isVerified",
         )
         .populate("from", "userName email address isOnline")
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
 
       res.json({
         success: true,
-        totalFollowing: following,
         message: "Following Listed Successfully",
+        totalCount,
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        limit,
+        totalFollowing: following,
       });
     } catch (err) {
       res.status(500).json({ success: false, message: "Server error" });
