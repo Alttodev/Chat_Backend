@@ -17,7 +17,8 @@ const notificationRouter = require("./routes/notificationRoutes");
 const statusRouter = require("./routes/statusRoutes");
 const profileviewRouter = require("./routes/profileViewsRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
-const publicRouter= require("./routes/publicRoutes");
+const publicRouter = require("./routes/publicRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 
 const { profile } = require("console");
 
@@ -63,7 +64,8 @@ app.use("/notifications", notificationRouter);
 app.use("/status", statusRouter);
 app.use("/profileviews", profileviewRouter);
 app.use("/verification", verificationRoutes);
-app.use("/user",publicRouter)
+app.use("/user", publicRouter)
+app.use("/ai", aiRoutes);
 
 const port = 4000;
 server.listen(port, async () => {
