@@ -12,9 +12,10 @@ const ConversationSchema = new mongoose.Schema(
     lastMessage: {
       text: { type: String, default: "" },
       image: { type: String, default: null },
+      audio: { type: String, default: null },
       type: {
         type: String,
-        enum: ["text", "image", "video", "mixed"],
+        enum: ["text", "image", "video", "audio", "mixed"],
         default: "text",
       },
       sender: {

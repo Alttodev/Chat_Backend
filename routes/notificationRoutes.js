@@ -128,6 +128,7 @@ router.get("/", auth, async (req, res) => {
             messageId: message._id,
             text: message.text,
             image: message.image,
+            audio: message.audio,
             type: message.type,
             createdAt: message.createdAt,
           },

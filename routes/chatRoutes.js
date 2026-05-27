@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const auth = require("../middleware/auth");
 const {
   mediaUpload,
-  ensureVideoDuration,
+  ensureMediaDuration,
 } = require("../middleware/cloudinaryUpload");
 const User = require("../models/userCreate");
 const Conversation = require("../models/conversation");
@@ -75,17 +75,32 @@ module.exports = (io) => {
   router.post(
     "/conversations/:targetUserId/messages",
     auth,
-    mediaUpload.single("image"),
+    mediaUpload.fields([
+      { name: "image", maxCount: 1 },
+      { name: "audio", maxCount: 1 },
+    ]),
     async (req, res) => {
       try {
         const { targetUserId } = req.params;
         const text = (req.body.text || "").trim();
-        const image = req.file ? req.file.path : null;
-        const isVideo = req.file?.mimetype?.startsWith("video/");
+        const imageFile = req.files?.image?.[0] || null;
+        const audioFile = req.files?.audio?.[0] || null;
+        const mediaFile = imageFile || audioFile || null;
+        const mediaUrl = mediaFile ? mediaFile.path : null;
+        const isImage = mediaFile?.mimetype?.startsWith("image/");
+        const isVideo = mediaFile?.mimetype?.startsWith("video/");
+        const isAudio = mediaFile?.mimetype?.startsWith("audio/");
 
-        await ensureVideoDuration(req.file, 60);
+        if (imageFile && audioFile) {
+          return res.status(400).json({
+            success: false,
+            message: "Only one media attachment is allowed at a time",
+          });
+        }
 
-        if (!text && !image) {
+        await ensureMediaDuration(mediaFile, 60);
+
+        if (!text && !mediaUrl) {
           return res.status(400).json({
             success: false,
             message: "Either text or media is required",
@@ -145,21 +160,29 @@ module.exports = (io) => {
           });
         }
 
-        const mediaType = isVideo ? "video" : image ? "image" : "text";
-        const type = text && image ? "mixed" : mediaType;
+        const mediaType = isAudio
+          ? "audio"
+          : isVideo
+            ? "video"
+            : isImage
+              ? "image"
+              : "text";
+        const type = text && mediaUrl ? "mixed" : mediaType;
 
         const message = await ChatMessage.create({
           conversation: conversation._id,
           sender: currentUser._id,
           text,
-          image,
+          image: isImage || isVideo ? mediaUrl : null,
+          audio: isAudio ? mediaUrl : null,
           type,
           seenBy: [currentUser._id],
         });
 
         conversation.lastMessage = {
           text,
-          image,
+          image: isImage || isVideo ? mediaUrl : null,
+          audio: isAudio ? mediaUrl : null,
           type,
           sender: currentUser._id,
         };
@@ -167,6 +190,15 @@ module.exports = (io) => {
         await conversation.save();
 
         const payload = await formatMessagePayload(message._id);
+        const notificationBody =
+          text ||
+          (type === "image"
+            ? "Sent an image"
+            : type === "video"
+              ? "Sent a video"
+              : type === "audio"
+                ? "Sent a voice note"
+                : "Sent you a message");
 
         io.to(targetUser.userId.toString()).emit("chat:message:new", {
           conversationId: conversation._id,
@@ -181,13 +213,7 @@ module.exports = (io) => {
         // push notification for target user
         await sendPushToUser(targetUser, {
           title: currentUser.userName || "New message",
-          body:
-            text ||
-            (type === "image"
-              ? "Sent an image"
-              : type === "video"
-                ? "Sent a video"
-                : "Sent you a message"),
+          body: notificationBody,
           data: {
             type: "chat-message",
             conversationId: conversation._id.toString(),
@@ -761,6 +787,7 @@ module.exports = (io) => {
         conversation.lastMessage = {
           text: "",
           image: null,
+          audio: null,
           type: "text",
           sender: null,
         };
@@ -769,6 +796,7 @@ module.exports = (io) => {
         conversation.lastMessage = {
           text: latestMessage.text,
           image: latestMessage.image,
+          audio: latestMessage.audio,
           type: latestMessage.type,
           sender: latestMessage.sender,
         };
