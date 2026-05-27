@@ -61,6 +61,19 @@ const LikeSchema = new mongoose.Schema({
   },
 });
 
+const BookmarkSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user",
+    required: true,
+  },
+
+  bookmarkedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
 const PostSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -88,6 +101,16 @@ const PostSchema = new mongoose.Schema({
 
   likedBy: {
     type: [LikeSchema],
+    default: [],
+  },
+
+  bookmarks: {
+    type: Number,
+    default: 0,
+  },
+
+  bookmarkedBy: {
+    type: [BookmarkSchema],
     default: [],
   },
 

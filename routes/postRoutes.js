@@ -65,6 +65,72 @@ const buildLikedUsers = async (likedBy = []) => {
     .filter(Boolean);
 };
 
+const getBookmarkUserId = (item) => {
+  if (!item) return null;
+
+  if (typeof item === "string") return item;
+
+  return item.user || null;
+};
+
+const getBookmarkTimestamp = (bookmark) => {
+  if (!bookmark || typeof bookmark !== "object") {
+    return null;
+  }
+
+  return bookmark.bookmarkedAt ? new Date(bookmark.bookmarkedAt) : null;
+};
+
+const buildPostExtras = (post, currentUserId, authUserId, likedUsers = []) => {
+  const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
+    .map(getLikeUserId)
+    .filter(Boolean);
+
+  const bookmarkedRecords = Array.isArray(post.bookmarkedBy)
+    ? post.bookmarkedBy
+    : [];
+  const bookmarkedByIds = bookmarkedRecords
+    .map(getBookmarkUserId)
+    .filter(Boolean);
+
+  const myReactionData = (
+    Array.isArray(post.likedBy) ? post.likedBy : []
+  ).find((item) => {
+    const userId = getLikeUserId(item);
+    return (
+      userId?.toString() === currentUserId ||
+      userId?.toString() === authUserId
+    );
+  });
+
+  const myBookmarkData = bookmarkedRecords.find((item) => {
+    const userId = getBookmarkUserId(item);
+    return (
+      userId?.toString() === currentUserId ||
+      userId?.toString() === authUserId
+    );
+  });
+
+  return {
+    ...post.toObject(),
+    likedByUsers: likedUsers,
+    likedByMe: likedByIds.some(
+      (userId) =>
+        userId?.toString() === currentUserId ||
+        userId?.toString() === authUserId,
+    ),
+    bookmarkedByMe: bookmarkedByIds.some(
+      (userId) =>
+        userId?.toString() === currentUserId ||
+        userId?.toString() === authUserId,
+    ),
+    bookmarkedAt: getBookmarkTimestamp(myBookmarkData),
+    bookmarks: bookmarkedRecords.length,
+    myReaction: myReactionData ? "like" : null,
+    isOwner: post.user && post.user._id.toString() === currentUserId,
+  };
+};
+
 // Create Post
 router.post("/create", auth, mediaUpload.single("image"), async (req, res) => {
   try {
@@ -253,33 +319,9 @@ router.get("/list", auth, async (req, res) => {
       posts.map((post) => buildLikedUsers(post.likedBy)),
     );
 
-    const postsWithExtra = posts.map((post, index) => {
-      const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
-        .map(getLikeUserId)
-        .filter(Boolean);
-
-      const myReactionData = (
-        Array.isArray(post.likedBy) ? post.likedBy : []
-      ).find((item) => {
-        const userId = getLikeUserId(item);
-        return (
-          userId?.toString() === currentUserId ||
-          userId?.toString() === authUserId
-        );
-      });
-
-      return {
-        ...post.toObject(),
-        likedByUsers: likedUsersByPost[index],
-        likedByMe: likedByIds.some(
-          (userId) =>
-            userId?.toString() === currentUserId ||
-            userId?.toString() === authUserId,
-        ),
-        myReaction: myReactionData ? "like" : null,
-        isOwner: post.user && post.user._id.toString() === currentUserId,
-      };
-    });
+    const postsWithExtra = posts.map((post, index) =>
+      buildPostExtras(post, currentUserId, authUserId, likedUsersByPost[index]),
+    );
 
     return res.status(200).json({
       success: true,
@@ -357,34 +399,9 @@ router.get("/videos", auth, async (req, res) => {
       posts.map((post) => buildLikedUsers(post.likedBy)),
     );
 
-    const postsWithExtra = posts.map((post, index) => {
-      const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
-        .map(getLikeUserId)
-        .filter(Boolean);
-
-      const myReactionData = (
-        Array.isArray(post.likedBy) ? post.likedBy : []
-      ).find((item) => {
-        const userId = getLikeUserId(item);
-
-        return (
-          userId?.toString() === currentUserId ||
-          userId?.toString() === authUserId
-        );
-      });
-
-      return {
-        ...post.toObject(),
-        likedByUsers: likedUsersByPost[index],
-        likedByMe: likedByIds.some(
-          (userId) =>
-            userId?.toString() === currentUserId ||
-            userId?.toString() === authUserId,
-        ),
-        myReaction: myReactionData ? "like" : null,
-        isOwner: post.user && post.user._id.toString() === currentUserId,
-      };
-    });
+    const postsWithExtra = posts.map((post, index) =>
+      buildPostExtras(post, currentUserId, authUserId, likedUsersByPost[index]),
+    );
 
     return res.status(200).json({
       success: true,
@@ -468,33 +485,9 @@ router.get("/hashtags/:tag", auth, async (req, res) => {
       posts.map((post) => buildLikedUsers(post.likedBy)),
     );
 
-    const postsWithExtra = posts.map((post, index) => {
-      const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
-        .map(getLikeUserId)
-        .filter(Boolean);
-
-      const myReactionData = (
-        Array.isArray(post.likedBy) ? post.likedBy : []
-      ).find((item) => {
-        const userId = getLikeUserId(item);
-        return (
-          userId?.toString() === currentUserId ||
-          userId?.toString() === authUserId
-        );
-      });
-
-      return {
-        ...post.toObject(),
-        likedByUsers: likedUsersByPost[index],
-        likedByMe: likedByIds.some(
-          (userId) =>
-            userId?.toString() === currentUserId ||
-            userId?.toString() === authUserId,
-        ),
-        myReaction: myReactionData ? "like" : null,
-        isOwner: post.user && post.user._id.toString() === currentUserId,
-      };
-    });
+    const postsWithExtra = posts.map((post, index) =>
+      buildPostExtras(post, currentUserId, authUserId, likedUsersByPost[index]),
+    );
 
     return res.status(200).json({
       success: true,
@@ -548,30 +541,9 @@ router.get("/list/:id", auth, async (req, res) => {
 
     const userDetails = await User.findOne({ _id: userId });
 
-    const postsWithExtra = posts.map((post, index) => {
-      const { user, ...rest } = post.toObject();
-      const likedByIds = post.likedBy.map(getLikeUserId);
-      const myReactionData = (
-        Array.isArray(post.likedBy) ? post.likedBy : []
-      ).find((item) => {
-        const userId = getLikeUserId(item);
-        return (
-          userId?.toString() === currentUserId ||
-          userId?.toString() === authUserId
-        );
-      });
-      return {
-        ...rest,
-        likedByUsers: likedUsersByPost[index],
-        likedByMe: likedByIds.some(
-          (likedUserId) =>
-            likedUserId.toString() === currentUserId ||
-            likedUserId === authUserId,
-        ),
-        isOwner: user?._id.toString() === currentUser._id.toString(),
-        myReaction: myReactionData ? "like" : null,
-      };
-    });
+    const postsWithExtra = posts.map((post, index) =>
+      buildPostExtras(post, currentUserId, authUserId, likedUsersByPost[index]),
+    );
 
     const user = posts[0]?.user || null;
     const userDetail = user ? user : userDetails;
@@ -617,6 +589,123 @@ router.get("/info/:id", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+router.post("/:id/bookmark", auth, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
+    }
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const currentUserId = currentUser._id.toString();
+
+    post.bookmarkedBy = Array.isArray(post.bookmarkedBy)
+      ? post.bookmarkedBy.filter((item) => item?.user)
+      : [];
+
+    const existingIndex = post.bookmarkedBy.findIndex(
+      (item) => String(item.user) === currentUserId,
+    );
+
+    let bookmarkedByMe = true;
+
+    if (existingIndex !== -1) {
+      post.bookmarkedBy.splice(existingIndex, 1);
+      bookmarkedByMe = false;
+    } else {
+      post.bookmarkedBy.push({
+        user: currentUser._id,
+        bookmarkedAt: new Date(),
+      });
+    }
+
+    post.bookmarks = post.bookmarkedBy.length;
+
+    await post.save();
+
+    return res.json({
+      success: true,
+      bookmarkedByMe,
+      bookmarks: post.bookmarks,
+      bookmarkedBy: post.bookmarkedBy,
+    });
+  } catch (err) {
+    console.error("BOOKMARK ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Server error",
+    });
+  }
+});
+
+router.get("/bookmarked", auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
+    const bookmarkQuery = {
+      bookmarkedBy: {
+        $elemMatch: {
+          user: currentUser._id,
+        },
+      },
+    };
+
+    const totalPosts = await Post.countDocuments(bookmarkQuery);
+
+    const posts = await Post.find(bookmarkQuery)
+      .populate("user", "userName email profileImage isVerified isPublic")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const likedUsersByPost = await Promise.all(
+      posts.map((post) => buildLikedUsers(post.likedBy)),
+    );
+
+    const postsWithExtra = posts.map((post, index) =>
+      buildPostExtras(post, currentUserId, authUserId, likedUsersByPost[index]),
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Bookmarked posts fetched successfully",
+      posts: postsWithExtra,
+      currentPage: page,
+      totalPages: Math.ceil(totalPosts / limit),
+      totalPosts,
+      limit,
+      hasMore: page < Math.ceil(totalPosts / limit),
+    });
+  } catch (err) {
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
