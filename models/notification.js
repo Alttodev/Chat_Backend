@@ -5,7 +5,15 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ["comment-mention","like", "comment"],
+      enum: [
+        "comment-mention",
+        "like",
+        "comment",
+        "rps-invite",
+        "rps-accepted",
+        "rps-rejected",
+        "puzzle-result",
+      ],
     },
     from: {
       type: mongoose.Schema.Types.ObjectId,
@@ -20,15 +28,25 @@ const notificationSchema = new mongoose.Schema(
     post: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "post",
-      required: true,
+      required: false,
     },
     commentId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: false,
     },
     comment: {
       type: String,
-      required: true,
+      required: false,
+    },
+    matchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "rpsmatch",
+      required: false,
+    },
+    payload: {
+      type: Object,
+      default: {},
+      required: false,
     },
     isRead: {
       type: Boolean,
@@ -39,7 +57,7 @@ const notificationSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Notification", notificationSchema);

@@ -17,23 +17,61 @@ const getCurrentUser = async (authUserId) => {
   return User.findOne({ userId: authUserId }).lean();
 };
 
-const mapCommentMentionNotification = (notification) => {
+const mapNotification = (notification) => {
   if (!notification) {
     return null;
   }
 
-  return {
-    type: "comment-mention",
+  const basePayload = {
+    type: notification.type,
     notificationId: notification._id,
     createdAt: notification.createdAt,
     isRead: notification.isRead,
-    postId: notification.post?._id || notification.post,
-    commentId: notification.commentId,
-    comment: notification.comment,
     from: notification.from,
-    post: notification.post,
-    message: `${notification.from?.userName || "Someone"} mentioned you in a comment`,
+    payload: notification.payload || {},
   };
+
+  switch (notification.type) {
+    case "comment-mention":
+      return {
+        ...basePayload,
+        type: "comment-mention",
+        postId: notification.post?._id || notification.post,
+        commentId: notification.commentId,
+        comment: notification.comment,
+        post: notification.post,
+        message: `${notification.from?.userName || "Someone"} mentioned you in a comment`,
+      };
+    case "rps-invite":
+      return {
+        ...basePayload,
+        type: "rps-invite",
+        matchId: notification.matchId,
+        message: `${notification.from?.userName || "Someone"} invited you to play RPS`,
+      };
+    case "rps-accepted":
+      return {
+        ...basePayload,
+        type: "rps-accepted",
+        matchId: notification.matchId,
+        message: "Your RPS invite was accepted",
+      };
+    case "rps-rejected":
+      return {
+        ...basePayload,
+        type: "rps-rejected",
+        matchId: notification.matchId,
+        message: "Your RPS invite was declined",
+      };
+    case "puzzle-result":
+      return {
+        ...basePayload,
+        type: "puzzle-result",
+        message: "A puzzle game result was recorded",
+      };
+    default:
+      return null;
+  }
 };
 
 router.get("/", auth, async (req, res) => {
@@ -80,9 +118,17 @@ router.get("/", auth, async (req, res) => {
         .lean(),
     ]);
 
-    const commentMentionNotifications = await Notification.find({
+    const notificationDocuments = await Notification.find({
       to: currentUser._id,
-      type: "comment-mention",
+      type: {
+        $in: [
+          "comment-mention",
+          "rps-invite",
+          "rps-accepted",
+          "rps-rejected",
+          "puzzle-result",
+        ],
+      },
       isDeleted: false,
       isRead: false,
     })
@@ -90,6 +136,17 @@ router.get("/", auth, async (req, res) => {
       .populate("post", "postText image createdAt user")
       .sort({ createdAt: -1 })
       .lean();
+
+    const mappedNotifications = notificationDocuments
+      .map(mapNotification)
+      .filter(Boolean);
+
+    const commentMentionNotifications = mappedNotifications.filter(
+      (item) => item.type === "comment-mention",
+    );
+    const gameNotifications = mappedNotifications.filter(
+      (item) => item.type !== "comment-mention",
+    );
 
     const followNotifications = pendingFollowRequests
       .filter((request) => !!request.from)
@@ -146,15 +203,10 @@ router.get("/", auth, async (req, res) => {
       (a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt),
     );
 
-    const mentionNotifications = commentMentionNotifications
-      .map(mapCommentMentionNotification)
-      .filter(Boolean)
-      .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
-
     const mergedNotifications = [
       ...followNotifications,
       ...chatNotifications,
-      ...mentionNotifications,
+      ...mappedNotifications,
     ].sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
 
     res.status(200).json({
@@ -164,16 +216,18 @@ router.get("/", auth, async (req, res) => {
         followRequests: followNotifications.length,
         unreadConversations: chatNotifications.length,
         unreadMessages: unreadMessages.length,
-        commentMentions: mentionNotifications.length,
+        commentMentions: commentMentionNotifications.length,
+        gameNotifications: gameNotifications.length,
         total:
           followNotifications.length +
           chatNotifications.length +
-          mentionNotifications.length,
+          mappedNotifications.length,
       },
       notifications: mergedNotifications.slice(0, limit),
       followRequestNotifications: followNotifications,
       chatNotifications,
-      commentMentionNotifications: mentionNotifications,
+      commentMentionNotifications: commentMentionNotifications,
+      gameNotifications,
     });
   } catch (err) {
     console.error(err);
@@ -205,22 +259,35 @@ router.get("/counts", auth, async (req, res) => {
       conversation: { $in: userConversationIds },
     };
 
-    const [followRequests, unreadMessages, unreadConversationIds, commentMentions] =
-      await Promise.all([
-        FollowRequest.countDocuments({
-          to: currentUser._id,
-          status: "pending",
-          isDeleted: false,
-        }),
-        ChatMessage.countDocuments(unreadMessageFilter),
-        ChatMessage.distinct("conversation", unreadMessageFilter),
-        Notification.countDocuments({
-          to: currentUser._id,
-          type: "comment-mention",
-          isDeleted: false,
-          isRead: false,
-        }),
-      ]);
+    const [
+      followRequests,
+      unreadMessages,
+      unreadConversationIds,
+      commentMentions,
+      gameNotifications,
+    ] = await Promise.all([
+      FollowRequest.countDocuments({
+        to: currentUser._id,
+        status: "pending",
+        isDeleted: false,
+      }),
+      ChatMessage.countDocuments(unreadMessageFilter),
+      ChatMessage.distinct("conversation", unreadMessageFilter),
+      Notification.countDocuments({
+        to: currentUser._id,
+        type: "comment-mention",
+        isDeleted: false,
+        isRead: false,
+      }),
+      Notification.countDocuments({
+        to: currentUser._id,
+        type: {
+          $in: ["rps-invite", "rps-accepted", "rps-rejected", "puzzle-result"],
+        },
+        isDeleted: false,
+        isRead: false,
+      }),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -230,7 +297,12 @@ router.get("/counts", auth, async (req, res) => {
         unreadConversations: unreadConversationIds.length,
         unreadMessages,
         commentMentions,
-        total: followRequests + unreadConversationIds.length + commentMentions,
+        gameNotifications,
+        total:
+          followRequests +
+          unreadConversationIds.length +
+          commentMentions +
+          gameNotifications,
       },
     });
   } catch (err) {
@@ -241,12 +313,7 @@ router.get("/counts", auth, async (req, res) => {
 
 router.put("/seen", auth, async (req, res) => {
   try {
-    const {
-      type,
-      followRequestId,
-      conversationId,
-      notificationId,
-    } = req.body;
+    const { type, followRequestId, conversationId, notificationId } = req.body;
     const currentUser = await getCurrentUser(req.user.id);
 
     if (!currentUser) {
@@ -316,7 +383,15 @@ router.put("/seen", auth, async (req, res) => {
       });
     }
 
-    if (type === "comment-mention") {
+    if (
+      [
+        "comment-mention",
+        "rps-invite",
+        "rps-accepted",
+        "rps-rejected",
+        "puzzle-result",
+      ].includes(type)
+    ) {
       if (!notificationId || !mongoose.Types.ObjectId.isValid(notificationId)) {
         return res.status(400).json({
           success: false,
@@ -328,7 +403,7 @@ router.put("/seen", auth, async (req, res) => {
         {
           _id: notificationId,
           to: currentUser._id,
-          type: "comment-mention",
+          type,
           isDeleted: false,
           isRead: false,
         },
@@ -345,7 +420,7 @@ router.put("/seen", auth, async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: "Comment mention notification marked as seen",
+        message: `${type.replace(/-/g, " ")} notification marked as seen`,
       });
     }
 

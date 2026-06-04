@@ -1,5 +1,6 @@
 const User = require("../models/userCreate");
 const RpsMatch = require("../models/rpsMatch");
+const Notification = require("../models/notification");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 
@@ -208,8 +209,30 @@ const userSocket = (io) => {
           });
         }
 
+        await Notification.create({
+          type: "rps-invite",
+          from: fromUser,
+          to: toUser,
+          matchId: match._id,
+          payload: {
+            fromUserName: data.fromUserName,
+            roomId: data.roomId,
+          },
+        });
+
         // Acknowledge sender with match id
         socket.emit("game:rps:invite:sent", { matchId: match._id });
+
+        if (room && room.size > 0) {
+          io.to(receiverRoom).emit("new-notification", {
+            type: "rps-invite",
+            matchId: match._id,
+            fromUserId: fromUser,
+            fromUserName: data.fromUserName || null,
+            message: `${data.fromUserName || "Someone"} invited you to play RPS`,
+            createdAt: match.createdAt,
+          });
+        }
       } catch (err) {
         console.error("Error creating rps invite:", err);
         socket.emit("game:error", { message: "Failed to create invite" });
@@ -226,11 +249,28 @@ const userSocket = (io) => {
         match.status = "accepted";
         await match.save();
 
+        await Notification.create({
+          type: "rps-accepted",
+          from: authUserId.toString(),
+          to: match.fromUserId,
+          matchId: match._id,
+          payload: {
+            toUserId: match.toUserId,
+          },
+        });
+
         // Notify both players to start the match
         io.to(match.fromUserId.toString()).emit("game:rps:accepted", {
           matchId: match._id,
           fromUserId: match.fromUserId,
           toUserId: match.toUserId,
+        });
+        io.to(match.fromUserId.toString()).emit("new-notification", {
+          type: "rps-accepted",
+          matchId: match._id,
+          fromUserId: authUserId.toString(),
+          message: "Your RPS invite was accepted",
+          createdAt: match.updatedAt,
         });
         io.to(match.toUserId.toString()).emit("game:rps:accepted", {
           matchId: match._id,
@@ -251,8 +291,25 @@ const userSocket = (io) => {
         match.status = "rejected";
         await match.save();
 
+        await Notification.create({
+          type: "rps-rejected",
+          from: authUserId.toString(),
+          to: match.fromUserId,
+          matchId: match._id,
+          payload: {
+            toUserId: match.toUserId,
+          },
+        });
+
         io.to(match.fromUserId.toString()).emit("game:rps:rejected", {
           matchId: match._id,
+        });
+        io.to(match.fromUserId.toString()).emit("new-notification", {
+          type: "rps-rejected",
+          matchId: match._id,
+          fromUserId: authUserId.toString(),
+          message: "Your RPS invite was declined",
+          createdAt: match.updatedAt,
         });
       } catch (err) {
         console.error("Error rejecting rps match:", err);
