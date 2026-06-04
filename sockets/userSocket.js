@@ -1,4 +1,5 @@
 const User = require("../models/userCreate");
+const RpsMatch = require("../models/rpsMatch");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 
@@ -38,7 +39,7 @@ const userSocket = (io) => {
   io.on("connection", async (socket) => {
     let authUserId = null;
     const token = extractToken(socket);
-     if (token) {
+    if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         authUserId = decoded?.user?.userId || decoded?.user?.id;
@@ -54,7 +55,7 @@ const userSocket = (io) => {
       }
     } else {
       authUserId = extractLegacyAuthUserId(socket);
-        console.log(authUserId, "connected with socket token");
+      console.log(authUserId, "connected with socket token");
       if (!authUserId) {
         console.log("No socket token or userId provided");
         socket.emit("socket-error", {
@@ -73,7 +74,7 @@ const userSocket = (io) => {
     }
 
     let user = null;
-   
+
     try {
       user = await User.findOneAndUpdate(
         { userId: authUserId },
@@ -81,7 +82,7 @@ const userSocket = (io) => {
         { new: true },
       );
       if (user) {
-         console.log(user,"User found for socket connection");
+        console.log(user, "User found for socket connection");
         console.log("User set online:", user.userName);
       } else {
         console.log("User not found for auth user id:", authUserId);
@@ -102,30 +103,30 @@ const userSocket = (io) => {
     }
 
     // � Call initiated - Forward to receiver
-   socket.on("call:initiate", (data) => {
-  const receiverRoom = data.receiverId.toString();
+    socket.on("call:initiate", (data) => {
+      const receiverRoom = data.receiverId.toString();
 
-     const room = io.sockets.adapter.rooms.get(receiverRoom);
-      
-  console.log("📡 Trying to call:", receiverRoom);
-  console.log("📡 Available rooms:", io.sockets.adapter.rooms);
+      const room = io.sockets.adapter.rooms.get(receiverRoom);
 
-  if (room && room.size > 0) {
-    io.to(receiverRoom).emit("call:incoming", {
-      callerId: data.callerId,
-      callerName: data.callerName,
-      roomName: data.roomName,
+      console.log("📡 Trying to call:", receiverRoom);
+      console.log("📡 Available rooms:", io.sockets.adapter.rooms);
+
+      if (room && room.size > 0) {
+        io.to(receiverRoom).emit("call:incoming", {
+          callerId: data.callerId,
+          callerName: data.callerName,
+          roomName: data.roomName,
+        });
+
+        console.log("✅ Call delivered to", receiverRoom);
+      } else {
+        console.log("❌ Receiver not connected:", receiverRoom);
+
+        socket.emit("call:error", {
+          message: "User not available to take call",
+        });
+      }
     });
-
-    console.log("✅ Call delivered to", receiverRoom);
-  } else {
-    console.log("❌ Receiver not connected:", receiverRoom);
-
-    socket.emit("call:error", {
-      message: "User not available to take call",
-    });
-  }
-});
 
     // ✅ Call accepted - Send to caller and receiver
     socket.on("call:accept", async (data) => {
@@ -181,6 +182,151 @@ const userSocket = (io) => {
         fromUserAuthId: authUserId.toString(),
         conversationId,
       });
+    });
+
+    // ----- Rock Paper Scissors (RPS) game events -----
+    socket.on("game:rps:invite", async (data) => {
+      try {
+        const toUser = data.toUserId;
+        const fromUser = authUserId.toString();
+
+        const match = await RpsMatch.create({
+          fromUserId: fromUser,
+          toUserId: toUser,
+          status: "pending",
+        });
+
+        // Notify receiver if online
+        const receiverRoom = toUser.toString();
+        const room = io.sockets.adapter.rooms.get(receiverRoom);
+        if (room && room.size > 0) {
+          io.to(receiverRoom).emit("game:rps:invite", {
+            matchId: match._id,
+            fromUserId: fromUser,
+            fromUserName: data.fromUserName || null,
+            createdAt: match.createdAt,
+          });
+        }
+
+        // Acknowledge sender with match id
+        socket.emit("game:rps:invite:sent", { matchId: match._id });
+      } catch (err) {
+        console.error("Error creating rps invite:", err);
+        socket.emit("game:error", { message: "Failed to create invite" });
+      }
+    });
+
+    socket.on("game:rps:accept", async (data) => {
+      try {
+        const matchId = data.matchId;
+        const match = await RpsMatch.findById(matchId);
+        if (!match)
+          return socket.emit("game:error", { message: "Match not found" });
+
+        match.status = "accepted";
+        await match.save();
+
+        // Notify both players to start the match
+        io.to(match.fromUserId.toString()).emit("game:rps:accepted", {
+          matchId: match._id,
+          fromUserId: match.fromUserId,
+          toUserId: match.toUserId,
+        });
+        io.to(match.toUserId.toString()).emit("game:rps:accepted", {
+          matchId: match._id,
+        });
+      } catch (err) {
+        console.error("Error accepting rps match:", err);
+        socket.emit("game:error", { message: "Failed to accept match" });
+      }
+    });
+
+    socket.on("game:rps:reject", async (data) => {
+      try {
+        const matchId = data.matchId;
+        const match = await RpsMatch.findById(matchId);
+        if (!match)
+          return socket.emit("game:error", { message: "Match not found" });
+
+        match.status = "rejected";
+        await match.save();
+
+        io.to(match.fromUserId.toString()).emit("game:rps:rejected", {
+          matchId: match._id,
+        });
+      } catch (err) {
+        console.error("Error rejecting rps match:", err);
+        socket.emit("game:error", { message: "Failed to reject match" });
+      }
+    });
+
+    socket.on("game:rps:move", async (data) => {
+      try {
+        const matchId = data.matchId;
+        const move = data.move; // "rock" | "paper" | "scissors"
+        const playerId = authUserId.toString();
+
+        const match = await RpsMatch.findById(matchId);
+        if (!match)
+          return socket.emit("game:error", { message: "Match not found" });
+        if (match.status !== "accepted")
+          return socket.emit("game:error", { message: "Match not active" });
+
+        // store move
+        match.moves = match.moves || [];
+        // replace existing move for user if present
+        const existing = match.moves.find(
+          (m) => m.userId.toString() === playerId,
+        );
+        if (existing) {
+          existing.move = move;
+        } else {
+          match.moves.push({ userId: playerId, move });
+        }
+
+        await match.save();
+
+        // If both players moved, compute result
+        if (match.moves.length >= 2) {
+          const a = match.moves[0];
+          const b = match.moves[1];
+          const result = (() => {
+            if (a.move === b.move) return "draw";
+            const wins = {
+              rock: "scissors",
+              paper: "rock",
+              scissors: "paper",
+            };
+            if (wins[a.move] === b.move) return a.userId.toString();
+            return b.userId.toString();
+          })();
+
+          match.status = "completed";
+          match.winner = result === "draw" ? null : result;
+          await match.save();
+
+          // Emit result to both players
+          const payload = {
+            matchId: match._id,
+            moves: match.moves.map((m) => ({ userId: m.userId, move: m.move })),
+            winner: match.winner,
+          };
+          io.to(match.fromUserId.toString()).emit("game:rps:result", payload);
+          io.to(match.toUserId.toString()).emit("game:rps:result", payload);
+        } else {
+          // notify opponent that someone moved
+          const opponentId =
+            match.fromUserId.toString() === playerId
+              ? match.toUserId.toString()
+              : match.fromUserId.toString();
+          io.to(opponentId).emit("game:rps:opponent-move", {
+            matchId: match._id,
+          });
+        }
+      } catch (err) {
+        console.error("Error handling rps move:", err);
+        socket.emit("game:error", { message: "Failed to register move" });
+      }
     });
 
     socket.on("disconnect", async () => {
