@@ -7,6 +7,7 @@ const User = require("../models/authUser");
 const { default: axios } = require("axios");
 const { requestPasswordReset } = require("../controllers/requestPassword");
 const { resetPassword } = require("../controllers/resetPassword");
+const Subscription = require("../models/subscription");
 
 //Signup
 
@@ -82,10 +83,21 @@ router.post("/login", async (req, res) => {
     }
 
     let user = await User.findOne({ email });
-    if (!user)
-      return res.status(400).json({ message: "User not found, please signup" });
 
-    const profile = await UserProfile.findOne({ userId: user._id });
+    if (!user) {
+      return res.status(400).json({
+        message: "User not found, please signup",
+      });
+    }
+
+    const profile = await UserProfile.findOne({
+      userId: user._id,
+    });
+
+    const subscription = await Subscription.findOne({
+      userId: user._id,
+      isActive: true,
+    });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
@@ -110,6 +122,9 @@ router.post("/login", async (req, res) => {
             _id: user._id,
             email: user.email,
             userName: profile?.userName,
+            subscription: subscription?.isActive || false,
+            subscriptionEndDate: subscription?.subscriptionEndDate || null,
+            planType: subscription?.planType || null,
             lastLogin: user.lastLogin,
             changedPassword: user.lastPasswordChange,
           },

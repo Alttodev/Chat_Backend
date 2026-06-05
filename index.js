@@ -19,6 +19,7 @@ const profileviewRouter = require("./routes/profileViewsRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
 const publicRouter = require("./routes/publicRoutes");
 const aiRoutes = require("./routes/aiRoutes");
+const subscriptionRouter = require("./routes/subscriptionRoutes");
 
 const { profile } = require("console");
 
@@ -55,6 +56,7 @@ userSocket(io);
 // Routes
 app.use("/auth", authRouter);
 app.use("/profile", userRouter);
+app.use("/subscription", subscriptionRouter);
 app.use("/post", postRouter);
 app.use("/posts", commentRouter(io));
 app.use("/follow", followRouter(io));
@@ -64,7 +66,7 @@ app.use("/notifications", notificationRouter);
 app.use("/status", statusRouter);
 app.use("/profileviews", profileviewRouter);
 app.use("/verification", verificationRoutes);
-app.use("/user", publicRouter)
+app.use("/user", publicRouter);
 app.use("/ai", aiRoutes);
 
 const port = 4000;

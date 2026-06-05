@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const UserProfile = require("../models/userCreate");
+const Subscription = require("../models/subscription");
 const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const upload = require("../middleware/cloudinaryUpload");
@@ -89,10 +91,19 @@ router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
 
 router.get("/me", auth, async (req, res) => {
   try {
-    const profile = await UserProfile.findOne({ userId: req.user.id });
+    const profile = await UserProfile.findOne({
+      userId: req.user.id,
+    });
+
+    const subscription = await Subscription.findOne({
+      userId: req.user.id,
+      isActive: true,
+    });
 
     if (!profile) {
-      return res.status(404).json({ message: "Profile not found" });
+      return res.status(404).json({
+        message: "Profile not found",
+      });
     }
 
     res.status(200).json({
@@ -108,10 +119,16 @@ router.get("/me", auth, async (req, res) => {
         isPublic: profile.isPublic,
         bio: profile.bio,
         id: profile._id,
+        subscription: subscription?.isActive || false,
       },
     });
   } catch (err) {
-    res.status(500).json({ message: "Server Error" });
+    console.error(err);
+
+    res.status(500).json({
+      message: "Server Error",
+      error: err.message,
+    });
   }
 });
 

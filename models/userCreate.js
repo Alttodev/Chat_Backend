@@ -16,11 +16,11 @@ const UserSchema = new mongoose.Schema({
     required: true,
   },
   bio: {
-  type: String,
-  trim: true,
-  maxlength: 150,
-  default: "",
-},
+    type: String,
+    trim: true,
+    maxlength: 150,
+    default: "",
+  },
   isPublic: {
     type: Boolean,
     default: false,
@@ -83,6 +83,16 @@ const UserSchema = new mongoose.Schema({
       },
     },
   ],
+
+  isPremium: {
+    type: Boolean,
+    default: false,
+  },
+
+  premiumSubscriptionEndDate: {
+    type: Date,
+    default: null,
+  },
 
   createdAt: {
     type: Date,
