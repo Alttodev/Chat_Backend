@@ -19,7 +19,6 @@ const profileviewRouter = require("./routes/profileViewsRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
 const publicRouter = require("./routes/publicRoutes");
 const aiRoutes = require("./routes/aiRoutes");
-const gameRouter = require("./routes/gameRoutes");
 
 const { profile } = require("console");
 
@@ -67,7 +66,6 @@ app.use("/profileviews", profileviewRouter);
 app.use("/verification", verificationRoutes);
 app.use("/user", publicRouter)
 app.use("/ai", aiRoutes);
-app.use("/game", gameRouter);
 
 const port = 4000;
 server.listen(port, async () => {

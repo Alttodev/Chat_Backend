@@ -8,11 +8,7 @@ const notificationSchema = new mongoose.Schema(
       enum: [
         "comment-mention",
         "like",
-        "comment",
-        "rps-invite",
-        "rps-accepted",
-        "rps-rejected",
-        "puzzle-result",
+        "comment"
       ],
     },
     from: {
