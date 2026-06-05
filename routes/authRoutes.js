@@ -122,7 +122,6 @@ router.post("/login", async (req, res) => {
             _id: user._id,
             email: user.email,
             userName: profile?.userName,
-            subscription: subscription?.isActive || false,
             subscriptionEndDate: subscription?.subscriptionEndDate || null,
             planType: subscription?.planType || null,
             lastLogin: user.lastLogin,

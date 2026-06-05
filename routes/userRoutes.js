@@ -95,11 +95,6 @@ router.get("/me", auth, async (req, res) => {
       userId: req.user.id,
     });
 
-    const subscription = await Subscription.findOne({
-      userId: req.user.id,
-      isActive: true,
-    });
-
     if (!profile) {
       return res.status(404).json({
         message: "Profile not found",
@@ -119,7 +114,6 @@ router.get("/me", auth, async (req, res) => {
         isPublic: profile.isPublic,
         bio: profile.bio,
         id: profile._id,
-        subscription: subscription?.isActive || false,
       },
     });
   } catch (err) {
