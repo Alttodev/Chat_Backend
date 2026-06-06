@@ -41,4 +41,6 @@ const StatusSchema = new mongoose.Schema(
 StatusSchema.index({ userId: 1, createdAt: -1 });
 StatusSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
 
-module.exports = mongoose.model("status", StatusSchema);
+module.exports =
+  mongoose.models.status ||
+  mongoose.model("status", StatusSchema);

@@ -7,6 +7,7 @@ const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const upload = require("../middleware/cloudinaryUpload");
 
+
 // profile create
 
 router.post(
@@ -340,5 +341,7 @@ router.delete("/push-tokens", auth, async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 });
+
+
 
 module.exports = router;

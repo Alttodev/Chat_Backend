@@ -22,4 +22,6 @@ const profileViewSchema = new mongoose.Schema(
 
 profileViewSchema.index({ viewer: 1, viewedUser: 1 }, { unique: true });
 
-module.exports = mongoose.model("ProfileView", profileViewSchema);
+module.exports =
+  mongoose.models.ProfileView ||
+  mongoose.model("ProfileView", profileViewSchema);

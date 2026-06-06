@@ -20,4 +20,6 @@ const ChatBlockSchema = new mongoose.Schema(
 
 ChatBlockSchema.index({ blocker: 1, blocked: 1 }, { unique: true });
 
-module.exports = mongoose.model("ChatBlock", ChatBlockSchema);
+module.exports =
+  mongoose.models.ChatBlock ||
+  mongoose.model("ChatBlock", ChatBlockSchema);

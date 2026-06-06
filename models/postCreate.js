@@ -132,4 +132,6 @@ PostSchema.pre("save", function (next) {
   next();
 });
 
-module.exports = mongoose.model("post", PostSchema);
+module.exports =
+  mongoose.models.post ||
+  mongoose.model("post", PostSchema);

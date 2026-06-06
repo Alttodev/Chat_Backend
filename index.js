@@ -20,6 +20,7 @@ const verificationRoutes = require("./routes/verificationRoutes");
 const publicRouter = require("./routes/publicRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const subscriptionRouter = require("./routes/subscriptionRoutes");
+const accountDeleteRouter = require("./routes/accountDeleteRoute");
 
 const { profile } = require("console");
 
@@ -68,6 +69,7 @@ app.use("/profileviews", profileviewRouter);
 app.use("/verification", verificationRoutes);
 app.use("/user", publicRouter);
 app.use("/ai", aiRoutes);
+app.use("/account", accountDeleteRouter);
 
 const port = 4000;
 server.listen(port, async () => {
