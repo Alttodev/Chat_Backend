@@ -31,7 +31,7 @@ const CommentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     default: null,
   },
- 
+
   comment: {
     type: String,
     required: true,
@@ -87,12 +87,13 @@ const PostSchema = new mongoose.Schema({
   },
 
   image: {
-    type: String,
+    type: [String],
+    default: [],
   },
   hashtags: {
-  type: [String],
-  default: [],
-},
+    type: [String],
+    default: [],
+  },
 
   likes: {
     type: Number,
@@ -132,6 +133,4 @@ PostSchema.pre("save", function (next) {
   next();
 });
 
-module.exports =
-  mongoose.models.post ||
-  mongoose.model("post", PostSchema);
+module.exports = mongoose.models.post || mongoose.model("post", PostSchema);

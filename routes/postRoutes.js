@@ -93,21 +93,20 @@ const buildPostExtras = (post, currentUserId, authUserId, likedUsers = []) => {
     .map(getBookmarkUserId)
     .filter(Boolean);
 
-  const myReactionData = (
-    Array.isArray(post.likedBy) ? post.likedBy : []
-  ).find((item) => {
-    const userId = getLikeUserId(item);
-    return (
-      userId?.toString() === currentUserId ||
-      userId?.toString() === authUserId
-    );
-  });
+  const myReactionData = (Array.isArray(post.likedBy) ? post.likedBy : []).find(
+    (item) => {
+      const userId = getLikeUserId(item);
+      return (
+        userId?.toString() === currentUserId ||
+        userId?.toString() === authUserId
+      );
+    },
+  );
 
   const myBookmarkData = bookmarkedRecords.find((item) => {
     const userId = getBookmarkUserId(item);
     return (
-      userId?.toString() === currentUserId ||
-      userId?.toString() === authUserId
+      userId?.toString() === currentUserId || userId?.toString() === authUserId
     );
   });
 
@@ -132,53 +131,60 @@ const buildPostExtras = (post, currentUserId, authUserId, likedUsers = []) => {
 };
 
 // Create Post
-router.post("/create", auth, mediaUpload.single("image"), async (req, res) => {
-  try {
-    const { postText = "" } = req.body;
+router.post(
+  "/create",
+  auth,
+  mediaUpload.array("image", 5),
+  async (req, res) => {
+    try {
+      const { postText = "" } = req.body;
 
-    const hashtags =
-      postText
-        .match(/#(\w+)/g)
-        ?.map((tag) => tag.replace("#", "").toLowerCase()) || [];
+      const hashtags =
+        postText
+          .match(/#(\w+)/g)
+          ?.map((tag) => tag.replace("#", "").toLowerCase()) || [];
 
-    await ensureVideoDuration(req.file, 60);
+      await ensureVideoDuration(req.file, 60);
 
-    const user = await User.findOne({ userId: req.user.id });
-    if (!user) {
-      return res.status(404).json({
+      const user = await User.findOne({ userId: req.user.id });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const mediaUrls = req.files?.map((file) => file.path) || [];
+
+      const post = new Post({
+        postText,
+        user: user._id,
+        image: mediaUrls,
+        hashtags,
+      });
+
+      await post.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Post created successfully",
+        post,
+      });
+    } catch (err) {
+      if (err?.statusCode) {
+        return res.status(err.statusCode).json({
+          success: false,
+          message: err.message,
+        });
+      }
+
+      res.status(500).json({
         success: false,
-        message: "User not found",
+        message: "Server error",
       });
     }
-
-    const post = new Post({
-      postText,
-      user: user._id,
-      image: req.file ? req.file.path : null,
-      hashtags,
-    });
-
-    await post.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Post created successfully",
-      post,
-    });
-  } catch (err) {
-    if (err?.statusCode) {
-      return res.status(err.statusCode).json({
-        success: false,
-        message: err.message,
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-});
+  },
+);
 
 // update post
 router.put("/update/:id", auth, async (req, res) => {
@@ -499,7 +505,6 @@ router.get("/hashtags/:tag", auth, async (req, res) => {
       totalPosts,
     });
   } catch (err) {
-    console.error("Hashtag route error:", err);
     return res.status(500).json({
       success: false,
       message: "Server error",
