@@ -42,33 +42,7 @@ const mapNotification = (notification) => {
         post: notification.post,
         message: `${notification.from?.userName || "Someone"} mentioned you in a comment`,
       };
-    case "rps-invite":
-      return {
-        ...basePayload,
-        type: "rps-invite",
-        matchId: notification.matchId,
-        message: `${notification.from?.userName || "Someone"} invited you to play RPS`,
-      };
-    case "rps-accepted":
-      return {
-        ...basePayload,
-        type: "rps-accepted",
-        matchId: notification.matchId,
-        message: "Your RPS invite was accepted",
-      };
-    case "rps-rejected":
-      return {
-        ...basePayload,
-        type: "rps-rejected",
-        matchId: notification.matchId,
-        message: "Your RPS invite was declined",
-      };
-    case "puzzle-result":
-      return {
-        ...basePayload,
-        type: "puzzle-result",
-        message: "A puzzle game result was recorded",
-      };
+
     default:
       return null;
   }
@@ -121,13 +95,7 @@ router.get("/", auth, async (req, res) => {
     const notificationDocuments = await Notification.find({
       to: currentUser._id,
       type: {
-        $in: [
-          "comment-mention",
-          "rps-invite",
-          "rps-accepted",
-          "rps-rejected",
-          "puzzle-result",
-        ],
+        $in: ["comment-mention"],
       },
       isDeleted: false,
       isRead: false,
@@ -383,15 +351,7 @@ router.put("/seen", auth, async (req, res) => {
       });
     }
 
-    if (
-      [
-        "comment-mention",
-        "rps-invite",
-        "rps-accepted",
-        "rps-rejected",
-        "puzzle-result",
-      ].includes(type)
-    ) {
+    if (["comment-mention"].includes(type)) {
       if (!notificationId || !mongoose.Types.ObjectId.isValid(notificationId)) {
         return res.status(400).json({
           success: false,
@@ -431,6 +391,81 @@ router.put("/seen", auth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.put("/clear-all", auth, async (req, res) => {
+  try {
+    const currentUser = await getCurrentUser(req.user.id);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Mark all notification documents as read
+    const notificationResult = await Notification.updateMany(
+      {
+        to: currentUser._id,
+        isDeleted: false,
+        isRead: false,
+      },
+      {
+        $set: { isRead: true },
+      },
+    );
+
+    // Mark all unread chat messages as seen
+    const userConversationIds = await mongoose
+      .model("Conversation")
+      .find({
+        participants: currentUser._id,
+      })
+      .distinct("_id");
+
+    const chatResult = await ChatMessage.updateMany(
+      {
+        sender: { $ne: currentUser._id },
+        seenBy: { $ne: currentUser._id },
+        conversation: { $in: userConversationIds },
+      },
+      {
+        $addToSet: {
+          seenBy: currentUser._id,
+        },
+      },
+    );
+
+    // Hide all pending follow request notifications
+    const followResult = await FollowRequest.updateMany(
+      {
+        to: currentUser._id,
+        status: "pending",
+        isDeleted: false,
+      },
+      {
+        $set: {
+          isDeleted: true,
+        },
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "All notifications cleared successfully",
+      data: {
+        notificationsCleared: notificationResult.modifiedCount || 0,
+        chatsCleared: chatResult.modifiedCount || 0,
+        followRequestsCleared: followResult.modifiedCount || 0,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
