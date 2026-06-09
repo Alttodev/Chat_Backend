@@ -102,65 +102,31 @@ const userSocket = (io) => {
       io.emit("user-online", authUserRoom);
     }
 
-    // � Call initiated - Forward to receiver
-    socket.on("call:initiate", (data) => {
-      const receiverRoom = data.receiverId.toString();
-
-      const room = io.sockets.adapter.rooms.get(receiverRoom);
-
-      console.log("📡 Trying to call:", receiverRoom);
-      console.log("📡 Available rooms:", io.sockets.adapter.rooms);
-
-      if (room && room.size > 0) {
-        io.to(receiverRoom).emit("call:incoming", {
-          callerId: data.callerId,
-          callerName: data.callerName,
-          roomName: data.roomName,
-        });
-
-        console.log("✅ Call delivered to", receiverRoom);
-      } else {
-        console.log("❌ Receiver not connected:", receiverRoom);
-
-        socket.emit("call:error", {
-          message: "User not available to take call",
-        });
-      }
+    // Caller sends offer
+    socket.on("call:offer", ({ receiverId, offer }) => {
+      io.to(receiverId.toString()).emit("call:offer", {
+        callerId: authUserId,
+        offer,
+      });
     });
 
-    // ✅ Call accepted - Send to caller and receiver
-    socket.on("call:accept", async (data) => {
-      try {
-        // Get current user's info (the receiver accepting the call)
-        const currentUser = await User.findOne({ userId: authUserId });
-
-        // Send acceptance to caller
-        io.to(data.callerId).emit("call:accepted", {
-          roomName: data.roomName,
-          fromUserName: currentUser?.userName || "User",
-        });
-
-        // Also emit to receiver to open Jitsi
-        socket.emit("call:accepted", {
-          roomName: data.roomName,
-          fromUserName: currentUser?.userName || "User",
-        });
-
-        console.log(
-          `Call accepted from ${authUserId.toString()} for ${data.callerId}`,
-        );
-      } catch (err) {
-        console.error("Error in call:accept:", err);
-        socket.emit("call:error", { message: "Error accepting call" });
-      }
+    // Receiver sends answer
+    socket.on("call:answer", ({ callerId, answer }) => {
+      io.to(callerId.toString()).emit("call:answer", {
+        answer,
+      });
     });
 
-    // ❌ Call rejected - Send to caller
-    socket.on("call:reject", (data) => {
-      io.to(data.callerId).emit("call:rejected");
-      console.log(
-        `Call rejected from ${authUserId.toString()} for ${data.callerId}`,
-      );
+    // Exchange ICE candidates
+    socket.on("call:ice-candidate", ({ targetUserId, candidate }) => {
+      io.to(targetUserId.toString()).emit("call:ice-candidate", {
+        candidate,
+      });
+    });
+
+    // End call
+    socket.on("call:end", ({ targetUserId }) => {
+      io.to(targetUserId.toString()).emit("call:end");
     });
 
     socket.on("check-user-status", async (id) => {
