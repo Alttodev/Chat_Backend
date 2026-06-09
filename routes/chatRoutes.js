@@ -242,111 +242,6 @@ module.exports = (io) => {
     },
   );
 
-  // router.get("/conversations", auth, async (req, res) => {
-  //   try {
-  //     const currentUser = await getCurrentUser(req.user.id);
-  //     if (!currentUser) {
-  //       return res
-  //         .status(404)
-  //         .json({ success: false, message: "User not found" });
-  //     }
-
-  //     const conversations = await Conversation.find({
-  //       participants: currentUser._id,
-  //     })
-  //       .populate("participants", "userName email isOnline lastSeen")
-  //       .populate("lastMessage.sender", "userName")
-  //       .sort({ lastMessageAt: -1 })
-  //       .lean();
-
-  //     const otherParticipantIds = conversations
-  //       .map((conversation) =>
-  //         conversation.participants.find(
-  //           (participant) =>
-  //             participant?._id?.toString() !== currentUser._id.toString(),
-  //         ),
-  //       )
-  //       .filter((participant) => !!participant?._id)
-  //       .map((participant) => participant._id);
-
-  //     const relatedBlocks = await ChatBlock.find({
-  //       $or: [
-  //         { blocker: currentUser._id, blocked: { $in: otherParticipantIds } },
-  //         { blocker: { $in: otherParticipantIds }, blocked: currentUser._id },
-  //       ],
-  //     })
-  //       .select("blocker blocked")
-  //       .lean();
-
-  //     const blockStatusByOtherUserId = new Map();
-
-  //     relatedBlocks.forEach((block) => {
-  //       const blockerId = block.blocker.toString();
-  //       const blockedId = block.blocked.toString();
-  //       const currentUserId = currentUser._id.toString();
-
-  //       if (blockerId === currentUserId) {
-  //         const existing = blockStatusByOtherUserId.get(blockedId) || {
-  //           blockedByMe: false,
-  //           blockedMe: false,
-  //         };
-  //         existing.blockedByMe = true;
-  //         blockStatusByOtherUserId.set(blockedId, existing);
-  //         return;
-  //       }
-
-  //       if (blockedId === currentUserId) {
-  //         const existing = blockStatusByOtherUserId.get(blockerId) || {
-  //           blockedByMe: false,
-  //           blockedMe: false,
-  //         };
-  //         existing.blockedMe = true;
-  //         blockStatusByOtherUserId.set(blockerId, existing);
-  //       }
-  //     });
-
-  //     const conversationsWithMeta = await Promise.all(
-  //       conversations.map(async (conversation) => {
-  //         const unreadCount = await ChatMessage.countDocuments({
-  //           conversation: conversation._id,
-  //           sender: { $ne: currentUser._id },
-  //           seenBy: { $ne: currentUser._id },
-  //         });
-
-  //         const otherParticipant = conversation.participants.find(
-  //           (participant) =>
-  //             participant?._id?.toString() !== currentUser._id.toString(),
-  //         );
-
-  //         const otherParticipantId = otherParticipant?._id?.toString();
-  //         const blockStatus = otherParticipantId
-  //           ? blockStatusByOtherUserId.get(otherParticipantId) || {
-  //               blockedByMe: false,
-  //               blockedMe: false,
-  //             }
-  //           : { blockedByMe: false, blockedMe: false };
-
-  //         return {
-  //           ...conversation,
-  //           otherParticipant,
-  //           blockedByMe: blockStatus.blockedByMe,
-  //           blockedMe: blockStatus.blockedMe,
-  //           isBlocked: blockStatus.blockedByMe || blockStatus.blockedMe,
-  //           unreadCount,
-  //         };
-  //       }),
-  //     );
-
-  //     res.status(200).json({
-  //       success: true,
-  //       message: "Conversations fetched successfully",
-  //       conversations: conversationsWithMeta,
-  //     });
-  //   } catch (err) {
-  //     console.error(err);
-  //     res.status(500).json({ success: false, message: "Server error" });
-  //   }
-  // });
   router.get("/conversations", auth, async (req, res) => {
     try {
       const currentUser = await getCurrentUser(req.user.id);
@@ -547,12 +442,15 @@ module.exports = (io) => {
             .catch(() => {});
         });
 
+        const totalPages = Math.ceil(totalMessages / limit);
+
         res.status(200).json({
           success: true,
-          message: "Messages fetched successfully",
           messages: orderedMessages,
-          nextPage: page + 1,
-          totalPages: Math.ceil(totalMessages / limit),
+          currentPage: page,
+          totalPages,
+          hasMore: page < totalPages,
+          nextPage: page < totalPages ? page + 1 : undefined,
         });
       } catch (err) {
         if (err?.code === 11000) {
