@@ -2,7 +2,6 @@ const User = require("../models/userCreate");
 const Notification = require("../models/notification");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-const callSession = require("../models/callSession");
 
 const extractToken = (socket) => {
   const authToken = socket.handshake?.auth?.token;
@@ -105,21 +104,9 @@ const userSocket = (io) => {
 
     // Caller sends offer
     socket.on("call:offer", async ({ receiverId, offer }) => {
-      const caller = await User.findOne({
-        userId: authUserId,
-      });
-
-      const session = await callSession.create({
-        callerId: authUserId,
-        receiverId,
-        callerName: caller?.userName,
-        callerImage: caller?.profileImage,
-        status: "ringing",
-      });
+      const caller = await User.findOne({ userId: authUserId });
 
       io.to(receiverId.toString()).emit("call:offer", {
-        callId: session._id,
-
         callerId: authUserId,
         callerName: caller?.userName,
         callerImage: caller?.profileImage,
@@ -128,14 +115,10 @@ const userSocket = (io) => {
     });
 
     // Receiver sends answer
-    socket.on("call:answer", async ({ callId, callerId, answer }) => {
-      await callSession.findByIdAndUpdate(callId, {
-        status: "accepted",
-      });
-
-      const caller = await User.findOne({
-        userId: callerId,
-      });
+    socket.on("call:answer", async ({ callerId, answer }) => {
+  
+      const caller = await User.findOne({ userId: callerId });
+      console.log(caller, "Caller info for answer");
 
       io.to(callerId.toString()).emit("call:answer", {
         answer,
@@ -156,27 +139,10 @@ const userSocket = (io) => {
     });
 
     // End call
-    socket.on("call:end", async ({ callId, targetUserId }) => {
-      if (callId) {
-        await callSession.findByIdAndUpdate(callId, {
-          status: "ended",
-        });
-      }
-
+    socket.on("call:end", ({ targetUserId }) => {
       io.to(targetUserId.toString()).emit("call:end");
     });
-    socket.on("call:restore", async ({ userId }) => {
-      const activeCall = await callSession.findOne({
-        status: {
-          $in: ["ringing", "accepted"],
-        },
-        $or: [{ callerId: userId }, { receiverId: userId }],
-      }).sort({
-        createdAt: -1,
-      });
 
-      socket.emit("call:restore-result", activeCall);
-    });
     socket.on("check-user-status", async (id) => {
       const online = io.sockets.adapter.rooms.has(id) ? true : false;
       socket.emit("user-status", { id, online });
