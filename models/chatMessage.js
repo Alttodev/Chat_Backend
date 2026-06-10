@@ -32,6 +32,17 @@ const ChatMessageSchema = new mongoose.Schema(
       enum: ["text", "image", "video", "audio", "mixed"],
       required: true,
     },
+    replyToMessage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ChatMessage",
+      default: null,
+    },
+
+    forwardedMessage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ChatMessage",
+      default: null,
+    },
     seenBy: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -39,7 +50,7 @@ const ChatMessageSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 ChatMessageSchema.index({ conversation: 1, createdAt: -1 });

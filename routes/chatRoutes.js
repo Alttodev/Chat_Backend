@@ -38,9 +38,25 @@ module.exports = (io) => {
   };
 
   const formatMessagePayload = async (messageId) => {
-    return ChatMessage.findById(messageId)
-      .populate("sender", "userName email isOnline")
+    const message = await ChatMessage.findById(messageId)
+      .populate("sender", "userId userName profileImage isOnline")
+      .populate({
+        path: "replyToMessage",
+        populate: {
+          path: "sender",
+          select: "userId userName profileImage",
+        },
+      })
+      .populate({
+        path: "forwardedMessage",
+        populate: {
+          path: "sender",
+          select: "userId userName profileImage",
+        },
+      })
       .lean();
+
+    return message;
   };
 
   const isBlockedBetween = async (userAId, userBId) => {
@@ -71,7 +87,6 @@ module.exports = (io) => {
 
     return !!followA && !!followB;
   };
-
   router.post(
     "/conversations/:targetUserId/messages",
     auth,
@@ -82,21 +97,28 @@ module.exports = (io) => {
     async (req, res) => {
       try {
         const { targetUserId } = req.params;
+
         const text = (req.body.text || "").trim();
+
+        const replyToMessageId = req.body.replyToMessageId || null;
+        const forwardedMessageId = req.body.forwardedMessageId || null;
+
         const imageFile = req.files?.image?.[0] || null;
         const audioFile = req.files?.audio?.[0] || null;
-        const mediaFile = imageFile || audioFile || null;
-        const mediaUrl = mediaFile ? mediaFile.path : null;
-        const isImage = mediaFile?.mimetype?.startsWith("image/");
-        const isVideo = mediaFile?.mimetype?.startsWith("video/");
-        const isAudio = mediaFile?.mimetype?.startsWith("audio/");
 
         if (imageFile && audioFile) {
           return res.status(400).json({
             success: false,
-            message: "Only one media attachment is allowed at a time",
+            message: "Only one media attachment is allowed",
           });
         }
+
+        const mediaFile = imageFile || audioFile || null;
+        const mediaUrl = mediaFile ? mediaFile.path : null;
+
+        const isImage = mediaFile?.mimetype?.startsWith("image/");
+        const isVideo = mediaFile?.mimetype?.startsWith("video/");
+        const isAudio = mediaFile?.mimetype?.startsWith("audio/");
 
         await ensureMediaDuration(mediaFile, 60);
 
@@ -108,17 +130,13 @@ module.exports = (io) => {
         }
 
         const currentUser = await getCurrentUser(req.user.id);
-        if (!currentUser) {
-          return res
-            .status(404)
-            .json({ success: false, message: "User not found" });
-        }
-
         const targetUser = await getUserByAnyId(targetUserId);
-        if (!targetUser) {
-          return res
-            .status(404)
-            .json({ success: false, message: "Target user not found" });
+
+        if (!currentUser || !targetUser) {
+          return res.status(404).json({
+            success: false,
+            message: "User not found",
+          });
         }
 
         if (currentUser._id.toString() === targetUser._id.toString()) {
@@ -129,11 +147,11 @@ module.exports = (io) => {
         }
 
         const blocked = await isBlockedBetween(currentUser._id, targetUser._id);
+
         if (blocked) {
           return res.status(403).json({
             success: false,
-            message:
-              "Message failed to send. One of you has blocked the other.",
+            message: "Blocked user cannot message",
           });
         }
 
@@ -141,10 +159,11 @@ module.exports = (io) => {
           currentUser._id,
           targetUser._id,
         );
+
         if (!areMutualFollowers) {
           return res.status(403).json({
             success: false,
-            message: "You can only chat with users you both follow.",
+            message: "Users must follow each other to chat",
           });
         }
 
@@ -167,8 +186,8 @@ module.exports = (io) => {
             : isImage
               ? "image"
               : "text";
-        const type = text && mediaUrl ? "mixed" : mediaType;
 
+        const type = text && mediaUrl ? "mixed" : mediaType;
         const message = await ChatMessage.create({
           conversation: conversation._id,
           sender: currentUser._id,
@@ -177,6 +196,9 @@ module.exports = (io) => {
           audio: isAudio ? mediaUrl : null,
           type,
           seenBy: [currentUser._id],
+
+          replyToMessage: replyToMessageId || null,
+          forwardedMessage: forwardedMessageId || null,
         });
 
         conversation.lastMessage = {
@@ -186,10 +208,18 @@ module.exports = (io) => {
           type,
           sender: currentUser._id,
         };
+
         conversation.lastMessageAt = new Date();
         await conversation.save();
 
         const payload = await formatMessagePayload(message._id);
+
+        const finalPayload = {
+          ...payload,
+          replyToMessage: payload.replyToMessage || null,
+          forwardedMessage: payload.forwardedMessage || null,
+        };
+
         const notificationBody =
           text ||
           (type === "image"
@@ -198,46 +228,29 @@ module.exports = (io) => {
               ? "Sent a video"
               : type === "audio"
                 ? "Sent a voice note"
-                : "Sent you a message");
-
+                : "Sent a message");
+        
         io.to(targetUser.userId.toString()).emit("chat:message:new", {
           conversationId: conversation._id,
-          message: payload,
+          message: finalPayload,
         });
 
         io.to(currentUser.userId.toString()).emit("chat:message:new", {
           conversationId: conversation._id,
-          message: payload,
+          message: finalPayload,
         });
-
-        // push notification for target user
-        await sendPushToUser(targetUser, {
-          title: currentUser.userName || "New message",
-          body: notificationBody,
-          data: {
-            type: "chat-message",
-            conversationId: conversation._id.toString(),
-            messageId: message._id.toString(),
-            fromUserId: currentUser.userId.toString(),
-            fromName: currentUser.userName,
-          },
-        });
-
-        res.status(201).json({
+        return res.status(201).json({
           success: true,
           message: "Message sent successfully",
           conversationId: conversation._id,
-          chatMessage: payload,
+          chatMessage: finalPayload,
         });
       } catch (err) {
-        if (err?.statusCode) {
-          return res.status(err.statusCode).json({
-            success: false,
-            message: err.message,
-          });
-        }
         console.error(err);
-        res.status(500).json({ success: false, message: "Server error" });
+        return res.status(500).json({
+          success: false,
+          message: "Server error",
+        });
       }
     },
   );
@@ -350,7 +363,6 @@ module.exports = (io) => {
         }),
       );
 
-      // ✅ Remove null (non-mutual users)
       const filteredConversations = conversationsWithMeta.filter(Boolean);
 
       res.status(200).json({
@@ -406,6 +418,20 @@ module.exports = (io) => {
           conversation: conversationId,
         })
           .populate("sender", "userName email isOnline")
+          .populate({
+            path: "replyToMessage",
+            populate: {
+              path: "sender",
+              select: "userName email profileImage isOnline",
+            },
+          })
+          .populate({
+            path: "forwardedMessage",
+            populate: {
+              path: "sender",
+              select: "userName email profileImage isOnline",
+            },
+          })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
