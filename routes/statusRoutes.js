@@ -53,7 +53,7 @@ router.post("/upload", auth, mediaUpload.single("image"), async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Status uploaded successfully",
+      message: "Story uploaded successfully",
       status,
     });
   } catch (err) {
@@ -63,7 +63,7 @@ router.post("/upload", auth, mediaUpload.single("image"), async (req, res) => {
         message: err.message,
       });
     }
-    console.error("Upload status error:", err);
+
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -94,13 +94,13 @@ router.get("/me", auth, async (req, res) => {
     ) {
       return res.status(404).json({
         success: false,
-        message: "Status not found",
+        message: "Story not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: "Status fetched successfully",
+      message: "Story fetched successfully",
       status,
     });
   } catch (err) {
@@ -175,7 +175,7 @@ router.get("/feed", auth, async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Friend statuses fetched successfully",
+      message: "Friend story fetched successfully",
       count: statuses.length,
       statuses,
     });
@@ -199,7 +199,7 @@ router.post("/seen/:statusId", auth, async (req, res) => {
     if (!status) {
       return res
         .status(404)
-        .json({ success: false, message: "Status not found" });
+        .json({ success: false, message: "Story not found" });
     }
 
     if (status.userId.toString() === user._id.toString()) {
@@ -233,7 +233,6 @@ router.post("/seen/:statusId", auth, async (req, res) => {
 
 router.delete("/delete", auth, async (req, res) => {
   try {
-
     const user = await User.findOne({ userId: req.user.id });
     if (!user) {
       return res.status(404).json({
@@ -264,10 +263,9 @@ router.delete("/delete", auth, async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Status deleted successfully",
+      message: "Story deleted successfully",
     });
   } catch (err) {
-    console.error("Delete status error:", err);
     return res.status(500).json({
       success: false,
       message: "Server error",
