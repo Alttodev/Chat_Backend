@@ -229,7 +229,7 @@ module.exports = (io) => {
               : type === "audio"
                 ? "Sent a voice note"
                 : "Sent a message");
-        
+
         io.to(targetUser.userId.toString()).emit("chat:message:new", {
           conversationId: conversation._id,
           message: finalPayload,

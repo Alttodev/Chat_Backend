@@ -103,20 +103,34 @@ const userSocket = (io) => {
     }
 
     // Caller sends offer
-    socket.on("call:offer", async ({ receiverId, offer }) => {
-      const caller = await User.findOne({ userId: authUserId });
+    // socket.on("call:offer", async ({ receiverId, offer }) => {
+    //   const caller = await User.findOne({ userId: authUserId });
 
-      io.to(receiverId.toString()).emit("call:offer", {
-        callerId: authUserId,
-        callerName: caller?.userName,
-        callerImage: caller?.profileImage,
-        offer,
-      });
-    });
+    //   io.to(receiverId.toString()).emit("call:offer", {
+    //     callerId: authUserId,
+    //     callerName: caller?.userName,
+    //     callerImage: caller?.profileImage,
+    //     offer,
+    //   });
+    // });
+
+    socket.on(
+      "call:offer",
+      async ({ receiverId, offer, callType = "audio" }) => {
+        const caller = await User.findOne({ userId: authUserId });
+
+        io.to(receiverId.toString()).emit("call:offer", {
+          callerId: authUserId,
+          callerName: caller?.userName,
+          callerImage: caller?.profileImage,
+          offer,
+          callType,
+        });
+      },
+    );
 
     // Receiver sends answer
     socket.on("call:answer", async ({ callerId, answer }) => {
-  
       const caller = await User.findOne({ userId: callerId });
       console.log(caller, "Caller info for answer");
 
