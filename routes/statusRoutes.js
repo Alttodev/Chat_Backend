@@ -148,7 +148,7 @@ router.get("/feed", auth, async (req, res) => {
       const key = status.userId?._id?.toString();
       if (!key || statusByUserId.has(key)) return;
       statusByUserId.set(key, {
-        id: status._id,
+        _id: status._id,
         image: status.image,
         caption: status.caption,
         createdAt: status.createdAt,
@@ -181,6 +181,44 @@ router.get("/feed", auth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+//for userinfo
+router.get("/user/feed/:userId", auth, async (req, res) => {
+  try {
+   const { userId } = req.params;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const latestStatuses = await Status.find({
+      userId: user._id,
+      createdAt: {
+        $gte: new Date(Date.now() - STATUS_LIFETIME_MS),
+      },
+    })
+      .sort({ createdAt: -1 })
+      .populate("userId", "userName profileImage isOnline lastSeen")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      statuses: latestStatuses,
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
