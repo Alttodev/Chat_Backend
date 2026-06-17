@@ -132,19 +132,20 @@ router.post("/login", async (req, res) => {
 
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
 
-// Step 1: Redirect user to Google consent screen
 router.get(
   "/google",
   passport.authenticate("google", { scope: ["profile", "email"] }),
 );
 
-// Step 2: Google redirects back here after user consents
 router.get(
   "/google/callback",
-  passport.authenticate("google", { session: false, failureRedirect: `${process.env.CLIENT_URL}/login?error=google_failed` }),
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: `${process.env.CLIENT_URL}/login?error=google_failed`,
+  }),
   async (req, res) => {
     try {
-      const user = req.user; // set by passport strategy
+      const user = req.user;
 
       const profile = await UserProfile.findOne({ userId: user._id });
       const subscription = await Subscription.findOne({
@@ -160,29 +161,30 @@ router.get(
         { expiresIn: "10d" },
         (err, token) => {
           if (err) {
-            return res.redirect(`${process.env.CLIENT_URL}/login?error=token_failed`);
+            return res.redirect(
+              `${process.env.CLIENT_URL}/login?error=token_failed`,
+            );
           }
 
-          // Encode user data as a query param so the frontend can store it
           const userData = encodeURIComponent(
             JSON.stringify({
               _id: user._id,
               email: user.email,
               userName: profile?.userName || null,
               profileImage: profile?.profileImage || null,
+              lastLogin: user.lastLogin,
+              changedPassword: user.lastPasswordChange,
               subscriptionEndDate: subscription?.subscriptionEndDate || null,
               planType: subscription?.planType || null,
             }),
           );
 
-          // Redirect to frontend with token + user data
           res.redirect(
             `${process.env.CLIENT_URL}/auth/google/success?token=${token}&user=${userData}`,
           );
         },
       );
     } catch (err) {
-      console.error("Google callback error:", err.message);
       res.redirect(`${process.env.CLIENT_URL}/login?error=server_error`);
     }
   },
