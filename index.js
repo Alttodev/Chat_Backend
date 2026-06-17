@@ -21,7 +21,7 @@ const publicRouter = require("./routes/publicRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const subscriptionRouter = require("./routes/subscriptionRoutes");
 const accountDeleteRouter = require("./routes/accountDeleteRoute");
-
+const passport = require("./config/passportConfig");
 const { profile } = require("console");
 
 const MONGODB_URI = process.env.MONGO_URL;
@@ -70,6 +70,7 @@ app.use("/verification", verificationRoutes);
 app.use("/user", publicRouter);
 app.use("/ai", aiRoutes);
 app.use("/account", accountDeleteRouter);
+app.use(passport.initialize());
 
 const port = 4000;
 server.listen(port, async () => {

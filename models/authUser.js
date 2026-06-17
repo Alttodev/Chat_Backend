@@ -8,8 +8,11 @@ const AuthUserSchema = mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: false,
+    default: null,
   },
+  googleId: { type: String, default: null },
+
   createdAt: {
     type: Date,
     default: Date.now(),
@@ -23,5 +26,4 @@ const AuthUserSchema = mongoose.Schema({
 });
 
 module.exports =
-  mongoose.models.authUser ||
-  mongoose.model("authUser", AuthUserSchema);
+  mongoose.models.authUser || mongoose.model("authUser", AuthUserSchema);
