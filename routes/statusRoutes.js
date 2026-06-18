@@ -15,23 +15,30 @@ const cloudinary = require("cloudinary").v2;
 
 router.post("/upload", auth, mediaUpload.single("image"), async (req, res) => {
   try {
-    const { caption = "" } = req.body;
+    const { caption = "", backgroundSong: backgroundSongRaw = null } = req.body;
+
+    let backgroundSong = null;
+    if (backgroundSongRaw) {
+      try {
+        backgroundSong = JSON.parse(backgroundSongRaw);
+      } catch {
+        backgroundSong = null;
+      }
+    }
 
     await ensureVideoDuration(req.file, 60);
 
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Image or video is required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Image or video is required" });
     }
 
     const user = await User.findOne({ userId: req.user.id });
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     const existingStatus = await Status.findOne({ userId: user._id });
@@ -49,25 +56,19 @@ router.post("/upload", auth, mediaUpload.single("image"), async (req, res) => {
       image: req.file.path,
       imagePublicId: req.file.filename,
       caption,
+      backgroundSong, 
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Story uploaded successfully",
-      status,
-    });
+    return res
+      .status(201)
+      .json({ success: true, message: "Story uploaded successfully", status });
   } catch (err) {
     if (err?.statusCode) {
-      return res.status(err.statusCode).json({
-        success: false,
-        message: err.message,
-      });
+      return res
+        .status(err.statusCode)
+        .json({ success: false, message: err.message });
     }
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 

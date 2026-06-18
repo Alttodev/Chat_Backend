@@ -20,6 +20,13 @@ const StatusSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    backgroundSong: {
+      id: { type: String, default: null },
+      title: { type: String, default: null },
+      artist: { type: String, default: null },
+      src: { type: String, default: null },
+      cover: { type: String, default: null },
+    },
     seenBy: [
       {
         user: {
@@ -42,5 +49,4 @@ StatusSchema.index({ userId: 1, createdAt: -1 });
 StatusSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
 
 module.exports =
-  mongoose.models.status ||
-  mongoose.model("status", StatusSchema);
+  mongoose.models.status || mongoose.model("status", StatusSchema);
