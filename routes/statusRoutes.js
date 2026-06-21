@@ -8,6 +8,7 @@ const {
 const User = require("../models/userCreate");
 const Status = require("../models/status");
 const FollowRequest = require("../models/followRequest");
+const HiddenStatusUser = require("../models/hiddenStatusUser");
 
 const STATUS_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
@@ -56,7 +57,7 @@ router.post("/upload", auth, mediaUpload.single("image"), async (req, res) => {
       image: req.file.path,
       imagePublicId: req.file.filename,
       caption,
-      backgroundSong, 
+      backgroundSong,
     });
 
     return res
@@ -136,6 +137,15 @@ router.get("/feed", auth, async (req, res) => {
       .filter(Boolean)
       .map((id) => id.toString());
 
+    // Build the set of userIds this viewer has chosen to hide.
+    const hiddenEntries = await HiddenStatusUser.find({
+      user: user._id,
+      hiddenUser: { $in: friendIds },
+    }).lean();
+    const hiddenUserIdSet = new Set(
+      hiddenEntries.map((entry) => entry.hiddenUser.toString()),
+    );
+
     const latestStatuses = await Status.find({
       userId: { $in: friendIds },
       createdAt: { $gte: new Date(Date.now() - STATUS_LIFETIME_MS) },
@@ -159,26 +169,35 @@ router.get("/feed", auth, async (req, res) => {
       });
     });
 
-    const statuses = friendRequests
-      .map((request) => {
-        const friend = request.from;
-        if (!friend) return null;
+    const visibleStatuses = [];
+    const hiddenStatuses = [];
 
-        const latestStatus = statusByUserId.get(friend._id.toString());
-        if (!latestStatus) return null;
+    friendRequests.forEach((request) => {
+      const friend = request.from;
+      if (!friend) return;
 
-        return {
-          user: friend,
-          status: latestStatus,
-        };
-      })
-      .filter(Boolean);
+      const latestStatus = statusByUserId.get(friend._id.toString());
+      if (!latestStatus) return;
+
+      const entry = {
+        user: friend,
+        status: latestStatus,
+      };
+
+      if (hiddenUserIdSet.has(friend._id.toString())) {
+        hiddenStatuses.push(entry);
+      } else {
+        visibleStatuses.push(entry);
+      }
+    });
 
     res.status(200).json({
       success: true,
       message: "Friend story fetched successfully",
-      count: statuses.length,
-      statuses,
+      count: visibleStatuses.length,
+      statuses: visibleStatuses,
+      hiddenCount: hiddenStatuses.length,
+      hiddenStatuses,
     });
   } catch (err) {
     res.status(500).json({
@@ -191,7 +210,7 @@ router.get("/feed", auth, async (req, res) => {
 //for userinfo
 router.get("/user/feed/:userId", auth, async (req, res) => {
   try {
-   const { userId } = req.params;
+    const { userId } = req.params;
 
     const user = await User.findById(userId);
 
@@ -261,6 +280,69 @@ router.post("/seen/:statusId", auth, async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Marked as seen",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+router.post("/hide/:userId", auth, async (req, res) => {
+  try {
+    const { userId: hiddenUserId } = req.params;
+
+    const user = await User.findOne({ userId: req.user.id });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    if (hiddenUserId === user._id.toString()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "You can't hide your own story" });
+    }
+
+    await HiddenStatusUser.findOneAndUpdate(
+      { user: user._id, hiddenUser: hiddenUserId },
+      { user: user._id, hiddenUser: hiddenUserId },
+      { upsert: true, new: true },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Story hidden",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+router.post("/unhide/:userId", auth, async (req, res) => {
+  try {
+    const { userId: hiddenUserId } = req.params;
+
+    const user = await User.findOne({ userId: req.user.id });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    await HiddenStatusUser.deleteOne({
+      user: user._id,
+      hiddenUser: hiddenUserId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Story unhidden",
     });
   } catch (err) {
     res.status(500).json({
