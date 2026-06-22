@@ -110,8 +110,10 @@ const buildPostExtras = (post, currentUserId, authUserId, likedUsers = []) => {
     );
   });
 
+  const postData = typeof post.toObject === "function" ? post.toObject() : post;
+
   return {
-    ...post.toObject(),
+    ...postData,
     likedByUsers: likedUsers,
     likedByMe: likedByIds.some(
       (userId) =>
@@ -841,6 +843,93 @@ router.post("/:id/like", auth, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: err.message || "Server error",
+    });
+  }
+});
+
+router.get("/trending", auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+
+    // Trending window: last 30 days
+    const windowDays = 30;
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - windowDays);
+
+    // Minimum likes to qualify as "trending" — tune this to your user base size
+    const minLikes = 1;
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const currentUserId = currentUser._id.toString();
+    const authUserId = req.user.id.toString();
+
+    const basePipeline = [
+      { $match: { createdAt: { $gte: windowStart } } },
+      {
+        $addFields: {
+          likeCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$likedBy", []] },
+                as: "reaction",
+                cond: { $eq: ["$$reaction.type", "like"] },
+              },
+            },
+          },
+        },
+      },
+      { $match: { likeCount: { $gte: minLikes } } },
+    ];
+
+    const countResult = await Post.aggregate([
+      ...basePipeline,
+      { $count: "total" },
+    ]);
+    const totalPosts = countResult[0]?.total || 0;
+
+    const posts = await Post.aggregate([
+      ...basePipeline,
+      { $sort: { likeCount: -1, createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ]);
+
+    const populatedPosts = await Post.populate(posts, {
+      path: "user",
+      select: "userName email profileImage isVerified isPublic",
+    });
+
+    const likedUsersByPost = await Promise.all(
+      populatedPosts.map((post) => buildLikedUsers(post.likedBy)),
+    );
+
+    const postsWithExtra = populatedPosts.map((post, index) =>
+      buildPostExtras(post, currentUserId, authUserId, likedUsersByPost[index]),
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Trending posts fetched successfully",
+      posts: postsWithExtra,
+      currentPage: page,
+      totalPages: Math.ceil(totalPosts / limit),
+      totalPosts,
+      limit,
+      hasMore: page < Math.ceil(totalPosts / limit),
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
     });
   }
 });
