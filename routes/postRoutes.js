@@ -934,4 +934,97 @@ router.get("/trending", auth, async (req, res) => {
   }
 });
 
+router.get("/trending-creators", auth, async (req, res) => {
+  try {
+    const windowDays = 30;
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - windowDays);
+
+    const targetUserId = req.query.userId;
+
+    let lookupUserId;
+
+    if (targetUserId) {
+      lookupUserId = targetUserId;
+    } else {
+      const currentUser = await User.findOne({ userId: req.user.id });
+      if (!currentUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+      lookupUserId = currentUser._id.toString();
+    }
+
+    const topCreators = await Post.aggregate([
+      { $match: { createdAt: { $gte: windowStart } } },
+      {
+        $addFields: {
+          likeCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$likedBy", []] },
+                as: "reaction",
+                cond: { $eq: ["$$reaction.type", "like"] },
+              },
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$user",
+          totalLikes: { $sum: "$likeCount" },
+          mostRecentPost: { $max: "$createdAt" },
+        },
+      },
+      { $match: { totalLikes: { $gt: 0 } } },
+      { $sort: { totalLikes: -1, mostRecentPost: -1 } },
+      { $limit: 3 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          _id: 0,
+          userId: "$user._id",
+          userName: "$user.userName",
+          profileImage: "$user.profileImage",
+          isVerified: "$user.isVerified",
+          totalLikes: 1,
+        },
+      },
+    ]);
+
+    const rankedCreators = topCreators.map((creator, index) => ({
+      ...creator,
+      rank: index + 1,
+    }));
+
+    const matchedCreator = rankedCreators.find(
+      (creator) => creator?.userId?.toString() === lookupUserId,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: matchedCreator
+        ? "Trending creator data fetched successfully"
+        : "User is not a trending creator",
+      creators: matchedCreator ? [matchedCreator] : [],
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 module.exports = router;
