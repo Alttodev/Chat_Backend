@@ -36,6 +36,35 @@ router.delete("/delete-account", auth, async (req, res) => {
       user: profileId,
     });
 
+    await Post.updateMany(
+      {},
+      {
+        $pull: {
+          comments: { user: profileId },
+          likedBy: { user: profileId },
+          bookmarkedBy: { user: profileId },
+        },
+      },
+    );
+
+    await Post.updateMany(
+      { "comments.reactions.user": profileId },
+      { $pull: { "comments.$[].reactions": { user: profileId } } },
+    );
+
+    const affectedPosts = await Post.find({}, "_id likedBy bookmarkedBy");
+    await Promise.all(
+      affectedPosts.map((post) =>
+        Post.updateOne(
+          { _id: post._id },
+          {
+            likes: post.likedBy.length,
+            bookmarks: post.bookmarkedBy.length,
+          },
+        ),
+      ),
+    );
+
     // Delete statuses
     await Status.deleteMany({
       userId: profileId,
