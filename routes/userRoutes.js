@@ -7,7 +7,6 @@ const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const upload = require("../middleware/cloudinaryUpload");
 
-
 // profile create
 
 router.post(
@@ -15,7 +14,7 @@ router.post(
   auth,
   upload.single("profileImage"),
   async (req, res) => {
-    const { userName, email, address, bio } = req.body;
+    const { userName, email, address, bio, dateOfBirth } = req.body;
 
     try {
       const userId = req.user.id;
@@ -32,6 +31,7 @@ router.post(
         address,
         profileImage,
         bio,
+        dateOfBirth: dateOfBirth || null,
       });
       await profile.save();
 
@@ -48,7 +48,7 @@ router.post(
 
 // Update profile
 router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
-  const { userName, email, address, bio, profileImage } = req.body;
+  const { userName, email, address, bio, profileImage, dateOfBirth } = req.body;
 
   try {
     const userId = req.user.id;
@@ -62,6 +62,9 @@ router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
     profile.email = email;
     profile.address = address;
     profile.bio = bio;
+    if (dateOfBirth !== undefined) {
+      profile.dateOfBirth = dateOfBirth || null;
+    }
 
     // If a new file is uploaded, use it
     if (req.file) {
@@ -114,6 +117,8 @@ router.get("/me", auth, async (req, res) => {
         isVerified: profile.isVerified,
         isPublic: profile.isPublic,
         bio: profile.bio,
+        dateOfBirth: profile.dateOfBirth,
+        birthdayReward: profile.birthdayReward,
         id: profile._id,
       },
     });
@@ -342,6 +347,56 @@ router.delete("/push-tokens", auth, async (req, res) => {
   }
 });
 
+// Claim birthday reward
+router.post("/claim-birthday-reward", auth, async (req, res) => {
+  try {
+    const profile = await UserProfile.findOne({ userId: req.user.id });
 
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    if (!profile.dateOfBirth) {
+      return res.status(400).json({ message: "Date of birth not set" });
+    }
+
+    const today = new Date();
+    const dob = new Date(profile.dateOfBirth);
+
+    const isBirthdayToday =
+      today.getDate() === dob.getDate() && today.getMonth() === dob.getMonth();
+
+    if (!isBirthdayToday) {
+      return res.status(400).json({ message: "It's not your birthday today" });
+    }
+
+    const currentYear = today.getFullYear();
+
+    if (profile.birthdayReward?.lastClaimedYear === currentYear) {
+      return res
+        .status(400)
+        .json({ message: "Reward already claimed this year" });
+    }
+
+    profile.birthdayReward = {
+      ...(profile.birthdayReward?.toObject?.() || profile.birthdayReward || {}),
+      lastClaimedYear: currentYear,
+    };
+
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Happy Birthday! Reward claimed successfully",
+      reward: {
+        type: "badge",
+        label: "Birthday Star",
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
 
 module.exports = router;

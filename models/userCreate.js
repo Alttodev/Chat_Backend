@@ -21,6 +21,16 @@ const UserSchema = new mongoose.Schema({
     maxlength: 150,
     default: "",
   },
+  dateOfBirth: {
+    type: Date,
+    required: false,
+  },
+  birthdayReward: {
+    lastClaimedYear: {
+      type: Number,
+      default: null,
+    },
+  },
   isPublic: {
     type: Boolean,
     default: false,
@@ -109,6 +119,4 @@ UserSchema.pre("save", function (next) {
   next();
 });
 
-module.exports =
-  mongoose.models.user ||
-  mongoose.model("user", UserSchema);
+module.exports = mongoose.models.user || mongoose.model("user", UserSchema);
