@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const UserProfile = require("../models/userCreate");
 const Subscription = require("../models/subscription");
+const User = require("../models/authUser");
 const Post = require("../models/postCreate");
 const auth = require("../middleware/auth");
 const upload = require("../middleware/cloudinaryUpload");
@@ -14,7 +15,7 @@ router.post(
   auth,
   upload.single("profileImage"),
   async (req, res) => {
-    const { userName, email, address, bio, dateOfBirth } = req.body;
+    const { userName, address, bio, dateOfBirth } = req.body;
 
     try {
       const userId = req.user.id;
@@ -23,11 +24,22 @@ router.post(
         return res.status(400).json({ message: "Profile already exists" });
       }
 
+      const existingUserName = await UserProfile.findOne({
+        userName: { $regex: `^${userName}$`, $options: "i" },
+      });
+      if (existingUserName) {
+        return res.status(400).json({ message: "Username is already taken" });
+      }
+      const authUser = await User.findById(userId);
+      if (!authUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
       const profileImage = req.file ? req.file.path : null;
       const profile = new UserProfile({
         userId,
         userName,
-        email,
+        email: authUser.email,
         address,
         profileImage,
         bio,
@@ -48,7 +60,7 @@ router.post(
 
 // Update profile
 router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
-  const { userName, email, address, bio, profileImage, dateOfBirth } = req.body;
+  const { userName, address, bio, profileImage } = req.body;
 
   try {
     const userId = req.user.id;
@@ -59,12 +71,8 @@ router.put("/update", auth, upload.single("profileImage"), async (req, res) => {
     }
 
     profile.userName = userName;
-    profile.email = email;
     profile.address = address;
     profile.bio = bio;
-    if (dateOfBirth !== undefined) {
-      profile.dateOfBirth = dateOfBirth || null;
-    }
 
     // If a new file is uploaded, use it
     if (req.file) {
