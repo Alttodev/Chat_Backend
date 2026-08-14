@@ -1,6 +1,6 @@
 const express = require("express");
 const { AccessToken } = require("livekit-server-sdk");
-const LiveSession = require("../models/LiveSession");
+const LiveSession = require("../models/liveSession");
 const router = express.Router();
 
 // Replace with your real auth middleware — assumes req.user is populated.
