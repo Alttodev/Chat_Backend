@@ -87,13 +87,6 @@ router.post("/end", requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-/**
- * GET /live/active
- * Manual join instead of .populate() — LiveSession.userId stores the
- * authUser id, but the User profile collection's _id is different; the
- * link is the User schema's own `userId` field, not its `_id`. Mongoose
- * populate() can only match against `_id`, so it can never work here.
- */
 router.get("/active", requireAuth, async (req, res) => {
   const { id: currentUserId } = req.user;
 
