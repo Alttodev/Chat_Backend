@@ -1,9 +1,10 @@
 const express = require("express");
 const { AccessToken } = require("livekit-server-sdk");
 const LiveSession = require("../models/liveSession");
+// Adjust this path to wherever your "user" profile model file actually is.
+const User = require("../models/userCreate");
 const router = express.Router();
 
-// Replace with your real auth middleware — assumes req.user is populated.
 const requireAuth = require("../middleware/auth");
 
 router.post("/start", requireAuth, async (req, res) => {
@@ -28,7 +29,6 @@ router.post("/start", requireAuth, async (req, res) => {
     canSubscribe: true,
   });
 
-  // upsert: if they had a stale session from a crashed tab, replace it
   await LiveSession.findOneAndUpdate(
     { userId },
     { userId, roomName, startedAt: new Date(), viewerCount: 0 },
@@ -42,10 +42,6 @@ router.post("/start", requireAuth, async (req, res) => {
   });
 });
 
-/**
- * POST /api/live/join/:hostUserId
- * Subscribe-only token for a viewer, plus a viewer-count bump.
- */
 router.post("/join/:hostUserId", requireAuth, async (req, res) => {
   const { id: viewerId, username } = req.user;
   const { hostUserId } = req.params;
@@ -79,31 +75,64 @@ router.post("/join/:hostUserId", requireAuth, async (req, res) => {
   });
 });
 
-/**
- * POST /api/live/end
- * Removes the session so the "Live" badge disappears everywhere.
- */
 router.post("/end", requireAuth, async (req, res) => {
   const { id: userId } = req.user;
   await LiveSession.deleteOne({ userId });
   res.json({ ok: true });
 });
 
+/**
+ * GET /live/active
+ * Manual join instead of .populate() — LiveSession.userId stores the
+ * authUser id, but the User profile collection's _id is different; the
+ * link is the User schema's own `userId` field, not its `_id`. Mongoose
+ * populate() can only match against `_id`, so it can never work here.
+ */
 router.get("/active", requireAuth, async (req, res) => {
-  const sessions = await LiveSession.find({})
-    .populate("userId", "username avatarUrl")
+  const { id: currentUserId } = req.user;
+
+  const sessions = await LiveSession.find({ userId: { $ne: currentUserId } })
     .sort({ startedAt: -1 })
     .lean();
 
-  res.json(
-    sessions.map((s) => ({
-      userId: s.userId._id,
-      username: s.userId.username,
-      avatarUrl: s.userId.avatarUrl,
-      viewerCount: s.viewerCount,
-      startedAt: s.startedAt,
-    }))
+  if (sessions.length === 0) {
+    return res.json([]);
+  }
+
+  const hostIds = sessions.map((s) => s.userId);
+
+  const profiles = await User.find({ userId: { $in: hostIds } })
+    .select("userId userName profileImage")
+    .lean();
+
+  const profileByUserId = new Map(
+    profiles.map((p) => [String(p.userId), p])
   );
+
+  const valid = [];
+  const orphanedIds = [];
+
+  for (const session of sessions) {
+    const profile = profileByUserId.get(String(session.userId));
+    if (!profile) {
+      orphanedIds.push(session._id);
+      continue;
+    }
+    valid.push({
+      userId: session.userId,
+      username: profile.userName,
+      avatarUrl: profile.profileImage,
+      viewerCount: session.viewerCount,
+      startedAt: session.startedAt,
+    });
+  }
+
+  // Clean up sessions with no matching profile (deleted/test accounts)
+  if (orphanedIds.length > 0) {
+    await LiveSession.deleteMany({ _id: { $in: orphanedIds } });
+  }
+
+  res.json(valid);
 });
 
 module.exports = router;
