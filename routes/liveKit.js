@@ -52,6 +52,10 @@ router.post("/join/:hostUserId", requireAuth, async (req, res) => {
     return res.status(404).json({ error: "This user isn't live right now." });
   }
 
+  const hostProfile = await User.findOne({ userId: hostUserId })
+    .select("userName profileImage")
+    .lean();
+
   const at = new AccessToken(
     process.env.LIVEKIT_API_KEY,
     process.env.LIVEKIT_API_SECRET,
@@ -72,6 +76,8 @@ router.post("/join/:hostUserId", requireAuth, async (req, res) => {
     token: await at.toJwt(),
     url: process.env.LIVEKIT_URL,
     roomName,
+    hostUsername: hostProfile?.userName || "Unknown",
+    hostAvatarUrl: hostProfile?.profileImage || null,
   });
 });
 
