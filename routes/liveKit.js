@@ -57,10 +57,6 @@ router.post("/start", requireAuth, async (req, res) => {
     canPublish: true,
     canSubscribe: true,
   });
-
-  // If a stale session exists (e.g. from a crashed tab that never called
-  // /end), clear out ITS old comments before reusing/creating a session,
-  // so nothing carries over into the new broadcast.
   const stale = await LiveSession.findOne({ userId });
   if (stale) {
     await LiveComment.deleteMany({ sessionId: stale._id });
@@ -76,8 +72,6 @@ router.post("/start", requireAuth, async (req, res) => {
     token: await at.toJwt(),
     url: process.env.LIVEKIT_URL,
     roomName,
-    // Fresh per broadcast — this is what scopes comments to THIS session
-    // only, instead of to the user (whose id never changes).
     sessionId: session._id,
   });
 });
@@ -146,8 +140,6 @@ router.post("/end", requireAuth, async (req, res) => {
 
   const session = await LiveSession.findOne({ userId });
   if (session) {
-    // Clean up this session's comments now, not just on the next /start —
-    // keeps the DB tidy even if the host never streams again.
     await LiveComment.deleteMany({ sessionId: session._id });
     await LiveSession.deleteOne({ _id: session._id });
   }
@@ -229,7 +221,6 @@ router.get("/active", requireAuth, async (req, res) => {
     });
   }
 
-  // Clean up sessions with no matching profile (deleted/test accounts)
   if (orphanedIds.length > 0) {
     await LiveSession.deleteMany({ _id: { $in: orphanedIds } });
   }
@@ -237,11 +228,6 @@ router.get("/active", requireAuth, async (req, res) => {
   res.json(valid);
 });
 
-/**
- * POST /live/comment/:sessionId
- * Scoped to the LIVE SESSION, not the user — so ending a broadcast and
- * starting a new one always starts with a clean comment thread.
- */
 router.post("/comment/:sessionId", requireAuth, async (req, res) => {
   const { sessionId } = req.params;
   const { text } = req.body;
@@ -266,10 +252,6 @@ router.post("/comment/:sessionId", requireAuth, async (req, res) => {
   res.json({ comment });
 });
 
-/**
- * GET /live/comments/:sessionId
- * Poll this every ~500ms while watching a stream for a live-chat feel.
- */
 router.get("/comments/:sessionId", requireAuth, async (req, res) => {
   const { sessionId } = req.params;
 
