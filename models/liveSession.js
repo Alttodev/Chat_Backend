@@ -1,13 +1,11 @@
-
 const mongoose = require("mongoose");
 
 const liveSessionSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "user",
       required: true,
-      unique: true, // one active session per user
+      unique: true, 
     },
     roomName: { type: String, required: true },
     startedAt: { type: Date, default: Date.now },
@@ -15,5 +13,6 @@ const liveSessionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
-module.exports = mongoose.model("LiveSession", liveSessionSchema);
+module.exports =
+  mongoose.models.LiveSession ||
+  mongoose.model("LiveSession", liveSessionSchema);
