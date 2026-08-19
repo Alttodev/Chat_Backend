@@ -81,6 +81,33 @@ const getBookmarkTimestamp = (bookmark) => {
   return bookmark.bookmarkedAt ? new Date(bookmark.bookmarkedAt) : null;
 };
 
+// New — computes poll-specific extras (total votes, which option the
+// current user picked) the same way buildPostExtras computes like/bookmark
+// extras. Only meaningful when post.postType === "poll".
+const buildPollExtras = (postData, currentUserId, authUserId) => {
+  if (postData.postType !== "poll") return {};
+
+  const options = Array.isArray(postData.pollOptions)
+    ? postData.pollOptions
+    : [];
+  const totalVotes = options.reduce((sum, o) => sum + (o.votes || 0), 0);
+
+  const votedRecords = Array.isArray(postData.pollVotedBy)
+    ? postData.pollVotedBy
+    : [];
+  const myVote = votedRecords.find((v) => {
+    const userId = v?.user;
+    return (
+      userId?.toString() === currentUserId || userId?.toString() === authUserId
+    );
+  });
+
+  return {
+    totalVotes,
+    myVoteOptionId: myVote ? myVote.option : null,
+  };
+};
+
 const buildPostExtras = (post, currentUserId, authUserId, likedUsers = []) => {
   const likedByIds = (Array.isArray(post.likedBy) ? post.likedBy : [])
     .map(getLikeUserId)
@@ -114,6 +141,7 @@ const buildPostExtras = (post, currentUserId, authUserId, likedUsers = []) => {
 
   return {
     ...postData,
+    ...buildPollExtras(postData, currentUserId, authUserId),
     likedByUsers: likedUsers,
     likedByMe: likedByIds.some(
       (userId) =>
@@ -188,7 +216,134 @@ router.post(
   },
 );
 
-// update post
+router.post("/create-poll", auth, async (req, res) => {
+  try {
+    const { question, options } = req.body;
+
+    if (!question || !question.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Question is required",
+      });
+    }
+
+    const cleanOptions = (options || [])
+      .map((t) => (typeof t === "string" ? t.trim() : ""))
+      .filter(Boolean);
+
+    if (cleanOptions.length < 2 || cleanOptions.length > 4) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide 2 to 4 options",
+      });
+    }
+
+    const hashtags =
+      question
+        .match(/#(\w+)/g)
+        ?.map((tag) => tag.replace("#", "").toLowerCase()) || [];
+
+    const user = await User.findOne({ userId: req.user.id });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const post = new Post({
+      postText: question.trim(),
+      user: user._id,
+      hashtags,
+      postType: "poll",
+      pollOptions: cleanOptions.map((text) => ({ text, votes: 0 })),
+    });
+
+    await post.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Poll posted successfully",
+      post,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+router.post("/:id/vote", auth, async (req, res) => {
+  try {
+    const { optionId } = req.body;
+
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Post not found" });
+    }
+
+    if (post.postType !== "poll") {
+      return res
+        .status(400)
+        .json({ success: false, message: "This post is not a poll" });
+    }
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const currentUserId = currentUser._id.toString();
+
+    post.pollVotedBy = Array.isArray(post.pollVotedBy) ? post.pollVotedBy : [];
+
+    const alreadyVoted = post.pollVotedBy.some(
+      (v) => v.user.toString() === currentUserId,
+    );
+    if (alreadyVoted) {
+      return res.status(400).json({
+        success: false,
+        message: "You already voted on this poll",
+      });
+    }
+
+    const option = post.pollOptions.id(optionId);
+    if (!option) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid option",
+      });
+    }
+
+    option.votes += 1;
+    post.pollVotedBy.push({ user: currentUser._id, option: optionId });
+    await post.save();
+
+    const totalVotes = post.pollOptions.reduce((sum, o) => sum + o.votes, 0);
+
+    return res.json({
+      success: true,
+      message: "Vote submitted",
+      post: {
+        ...post.toObject(),
+        totalVotes,
+        myVoteOptionId: optionId,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Server error",
+    });
+  }
+});
+
+
 router.put("/update/:id", auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);

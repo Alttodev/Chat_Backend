@@ -74,6 +74,34 @@ const BookmarkSchema = new mongoose.Schema({
   },
 });
 
+const PollOptionSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true,
+    maxlength: 80,
+  },
+  votes: {
+    type: Number,
+    default: 0,
+  },
+});
+
+const PollVoteSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user",
+    required: true,
+  },
+  option: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+  },
+  votedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
 const PostSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -92,6 +120,20 @@ const PostSchema = new mongoose.Schema({
   },
   hashtags: {
     type: [String],
+    default: [],
+  },
+
+  postType: {
+    type: String,
+    enum: ["text", "poll"],
+    default: "text",
+  },
+  pollOptions: {
+    type: [PollOptionSchema],
+    default: undefined, 
+  },
+  pollVotedBy: {
+    type: [PollVoteSchema],
     default: [],
   },
 
