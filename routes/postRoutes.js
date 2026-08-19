@@ -81,9 +81,6 @@ const getBookmarkTimestamp = (bookmark) => {
   return bookmark.bookmarkedAt ? new Date(bookmark.bookmarkedAt) : null;
 };
 
-// New — computes poll-specific extras (total votes, which option the
-// current user picked) the same way buildPostExtras computes like/bookmark
-// extras. Only meaningful when post.postType === "poll".
 const buildPollExtras = (postData, currentUserId, authUserId) => {
   if (postData.postType !== "poll") return {};
 
@@ -571,6 +568,7 @@ router.get("/videos", auth, async (req, res) => {
       message: "Video posts fetched successfully",
       posts: postsWithExtra,
       currentPage: page,
+      nextPage: page + 1,
       totalPages: Math.ceil(totalPosts / limit),
       totalPosts,
       limit,
