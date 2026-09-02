@@ -205,12 +205,6 @@ module.exports = (io) => {
 
       const request = await FollowRequest.findOne({ from: fromId, to: toId });
 
-      // if (!request) {
-      //   return res
-      //     .status(404)
-      //     .json({ success: false, message: "No request found between users" });
-      // }
-
       res.json({ success: true, request });
     } catch (err) {
       res.status(500).json({ success: false, message: "Server error" });
