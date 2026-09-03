@@ -27,10 +27,6 @@ User: ${message}`;
   return sanitizeAIReply(raw);
 }
 
-// Defensive cleanup: free-tier OpenRouter models are auto-routed, so the
-// actual model backing any given request varies — some append boilerplate
-// like "Note: for user safety..." regardless of the prompt. Strip lines
-// that are clearly meta-commentary rather than the actual answer.
 function sanitizeAIReply(text) {
   if (!text) return text;
 
@@ -50,26 +46,73 @@ function sanitizeAIReply(text) {
   return cleaned.replace(/\n{2,}/g, "\n").trim();
 }
 
-// Simple keyword-overlap scorer — no external dependency needed for
-// something this small.
+const SMALLTALK = [
+  {
+    patterns: ["thanks", "thank you", "thx", "ty", "appreciate it"],
+    reply: "You're welcome! Let me know if there's anything else you need.",
+  },
+  {
+    patterns: ["hi", "hello", "hey", "yo", "hiya"],
+    reply:
+      "Hey! Ask me anything about using Clix — posts, polls, live, stories, and more.",
+  },
+  {
+    patterns: ["bye", "goodbye", "see you", "later"],
+    reply: "Bye! Come back anytime you need help with Clix.",
+  },
+  {
+    patterns: ["ok", "okay", "cool", "great", "nice", "got it"],
+    reply: "Glad that helped! Anything else I can do for you?",
+  },
+];
+
+function findSmalltalk(message) {
+  const normalized = message.toLowerCase().trim();
+  const words = new Set(tokenize(normalized));
+
+  for (const entry of SMALLTALK) {
+    const matches = entry.patterns.some(
+      (p) => p === normalized || words.has(p),
+    );
+    if (matches) return entry.reply;
+  }
+
+  return null;
+}
+
+function tokenize(str) {
+  return str
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 function findFaqMatch(message) {
-  const normalized = message.toLowerCase();
+  const messageWords = new Set(tokenize(message));
+
   let best = null;
   let bestScore = 0;
 
   for (const entry of FAQ) {
-    const score = entry.keywords.reduce(
-      (sum, kw) => sum + (normalized.includes(kw) ? kw.split(" ").length : 0),
-      0,
-    );
+    let score = 0;
+
+    for (const keyword of entry.keywords) {
+      const keywordWords = tokenize(keyword);
+      // Every word in this keyword phrase must appear as its own exact
+      // word in the message — not just be contained inside a longer word.
+      const allWordsPresent = keywordWords.every((w) => messageWords.has(w));
+      if (allWordsPresent) {
+        score += keywordWords.length;
+      }
+    }
+
     if (score > bestScore) {
       bestScore = score;
       best = entry;
     }
   }
 
-  // Require at least a 2-word-equivalent match so single common words
-  // (like "post" alone) don't trigger overly confident wrong matches.
   return bestScore >= 2 ? best : null;
 }
 
@@ -81,6 +124,15 @@ router.post("/chatbot", auth, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Message is required",
+      });
+    }
+
+    const smalltalkReply = findSmalltalk(message);
+    if (smalltalkReply) {
+      return res.json({
+        success: true,
+        reply: smalltalkReply,
+        source: "smalltalk",
       });
     }
 
