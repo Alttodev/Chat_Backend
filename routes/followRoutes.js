@@ -197,7 +197,7 @@ module.exports = (io) => {
     } catch (err) {
       res.status(500).json({ success: false, message: "Server error" });
     }
-  });
+  }); 
 
   router.get("/requests/:fromId/:toId", auth, async (req, res) => {
     try {
@@ -210,6 +210,49 @@ module.exports = (io) => {
       res.status(500).json({ success: false, message: "Server error" });
     }
   });
+
+  router.post("/requests/batch-status", auth, async (req, res) => {
+  try {
+    const { toIds } = req.body;
+ 
+    if (!Array.isArray(toIds) || toIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "toIds array is required",
+      });
+    }
+ 
+    const user = await User.findOne({ userId: req.user.id });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+ 
+    // ONE query covers every user card on the page, instead of one query
+    // per card via /requests/:fromId/:toId.
+    const requests = await FollowRequest.find({
+      from: user._id,
+      to: { $in: toIds },
+    }).select("to status isFriends");
+ 
+    const statusMap = {};
+    toIds.forEach((id) => {
+      statusMap[id] = { status: null, isFriends: false };
+    });
+ 
+    requests.forEach((r) => {
+      statusMap[r.to.toString()] = {
+        status: r.status,
+        isFriends: r.isFriends,
+      };
+    });
+ 
+    res.json({ success: true, statuses: statusMap });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
   router.delete("/delete/requests/:fromId/:toId", auth, async (req, res) => {
     try {

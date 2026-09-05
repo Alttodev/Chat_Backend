@@ -203,7 +203,7 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-router.get("/counts", auth, async (req, res) => {
+router.get("/notification", auth, async (req, res) => {
   try {
     const currentUser = await getCurrentUser(req.user.id);
 
