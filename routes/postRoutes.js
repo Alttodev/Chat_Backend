@@ -694,6 +694,16 @@ router.get("/list/:id", auth, async (req, res) => {
     }
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
+    const [outgoingFollow, incomingFollow] = await Promise.all([
+      FollowRequest.findOne({
+        from: currentUser._id,
+        to: userId,
+      }).select("status isFriends"),
+      FollowRequest.findOne({
+        from: userId,
+        to: currentUser._id,
+      }).select("status isFriends"),
+    ]);
     const isFriends =
       currentUserId === userId ||
       Boolean(
@@ -728,6 +738,8 @@ router.get("/list/:id", auth, async (req, res) => {
         id: currentUser?._id,
       },
       isFriends,
+      followStatus: outgoingFollow?.status || null,
+      followedByStatus: incomingFollow?.status || null,
       posts: postsWithExtra,
       totalPosts: totalPosts,
       nextPage: page + 1,
