@@ -340,7 +340,6 @@ router.post("/:id/vote", auth, async (req, res) => {
   }
 });
 
-
 router.put("/update/:id", auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
@@ -695,6 +694,18 @@ router.get("/list/:id", auth, async (req, res) => {
     }
     const currentUserId = currentUser._id.toString();
     const authUserId = req.user.id.toString();
+    const isFriends =
+      currentUserId === userId ||
+      Boolean(
+        await FollowRequest.exists({
+          status: "accepted",
+          isFriends: true,
+          $or: [
+            { from: currentUser._id, to: userId },
+            { from: userId, to: currentUser._id },
+          ],
+        }),
+      );
     const likedUsersByPost = await Promise.all(
       posts.map((post) => buildLikedUsers(post.likedBy)),
     );
@@ -716,6 +727,7 @@ router.get("/list/:id", auth, async (req, res) => {
         profileImage: currentUser.profileImage,
         id: currentUser?._id,
       },
+      isFriends,
       posts: postsWithExtra,
       totalPosts: totalPosts,
       nextPage: page + 1,
@@ -992,7 +1004,6 @@ router.post("/:id/like", auth, async (req, res) => {
         : null,
     });
   } catch (err) {
-    console.error("LIKE ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message || "Server error",
