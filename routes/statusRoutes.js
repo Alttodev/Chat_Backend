@@ -153,6 +153,7 @@ router.get("/feed", auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .populate("userId", "userName profileImage isOnline lastSeen")
       .lean();
+    
 
     const statusByUserId = new Map();
     latestStatuses.forEach((status) => {
@@ -164,6 +165,7 @@ router.get("/feed", auth, async (req, res) => {
         caption: status.caption,
         createdAt: status.createdAt,
         updatedAt: status.updatedAt,
+        backgroundSong: status.backgroundSong,
         user: status.userId,
         seenBy: status.seenBy || [],
       });
@@ -237,7 +239,6 @@ router.get("/user/feed/:userId", auth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-
     return res.status(500).json({
       success: false,
       message: "Server error",
