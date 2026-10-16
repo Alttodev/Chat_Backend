@@ -132,7 +132,23 @@ router.get("/feed", auth, async (req, res) => {
       .populate("from", "userName profileImage isOnline lastSeen")
       .lean();
 
-    const friendIds = friendRequests
+    const followingRequests = await FollowRequest.find({
+      from: user._id,
+      status: "accepted",
+      isFriends: true,
+      isDeleted: true,
+    })
+      .select("to")
+      .lean();
+    const followingIds = new Set(
+      followingRequests.map((request) => request.to.toString()),
+    );
+    const mutualFriendRequests = friendRequests.filter(
+      (request) =>
+        request.from && followingIds.has(request.from._id.toString()),
+    );
+
+    const friendIds = mutualFriendRequests
       .map((request) => request.from?._id)
       .filter(Boolean)
       .map((id) => id.toString());
@@ -153,7 +169,6 @@ router.get("/feed", auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .populate("userId", "userName profileImage isOnline lastSeen")
       .lean();
-    
 
     const statusByUserId = new Map();
     latestStatuses.forEach((status) => {
@@ -174,7 +189,7 @@ router.get("/feed", auth, async (req, res) => {
     const visibleStatuses = [];
     const hiddenStatuses = [];
 
-    friendRequests.forEach((request) => {
+    mutualFriendRequests.forEach((request) => {
       const friend = request.from;
       if (!friend) return;
 
@@ -211,6 +226,7 @@ router.get("/feed", auth, async (req, res) => {
 
 //for userinfo
 router.get("/user/feed/:userId", auth, async (req, res) => {
+
   try {
     const { userId } = req.params;
 
@@ -220,6 +236,47 @@ router.get("/user/feed/:userId", auth, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    const currentUser = await User.findOne({ userId: req.user.id });
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const isHidden = Boolean(
+      await HiddenStatusUser.exists({
+        user: currentUser._id,
+        hiddenUser: user._id,
+      }),
+    );
+
+    const mutualFollowFilter = {
+      status: "accepted",
+      isFriends: true,
+      isDeleted: true,
+    };
+    const [userFollowsTarget, targetFollowsUser] = await Promise.all([
+      FollowRequest.exists({
+        ...mutualFollowFilter,
+        from: currentUser._id,
+        to: user._id,
+      }),
+      FollowRequest.exists({
+        ...mutualFollowFilter,
+        from: user._id,
+        to: currentUser._id,
+      }),
+    ]);
+
+    if (!userFollowsTarget || !targetFollowsUser) {
+      return res.status(200).json({
+        success: true,
+        isHidden,
+        statuses: [],
       });
     }
 
@@ -235,6 +292,7 @@ router.get("/user/feed/:userId", auth, async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      isHidden,
       statuses: latestStatuses,
     });
   } catch (err) {
