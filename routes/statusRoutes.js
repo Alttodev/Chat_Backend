@@ -261,25 +261,18 @@ router.get("/user/feed/:userId", auth, async (req, res) => {
       }),
     );
 
-    const mutualFollowFilter = {
+    const friendFilter = {
       status: "accepted",
       isFriends: true,
       isDeleted: true,
     };
-    const [userFollowsTarget, targetFollowsUser] = await Promise.all([
-      FollowRequest.exists({
-        ...mutualFollowFilter,
-        from: currentUser._id,
-        to: user._id,
-      }),
-      FollowRequest.exists({
-        ...mutualFollowFilter,
-        from: user._id,
-        to: currentUser._id,
-      }),
-    ]);
+    const isFriend = await FollowRequest.exists({
+      ...friendFilter,
+      from: currentUser._id,
+      to: user._id,
+    });
 
-    if (!userFollowsTarget || !targetFollowsUser) {
+    if (!isFriend) {
       return res.status(200).json({
         success: true,
         isHidden,
