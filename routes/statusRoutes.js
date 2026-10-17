@@ -100,10 +100,18 @@ router.get("/me", auth, async (req, res) => {
       });
     }
 
+    const seenUserIds = new Set();
+    const uniqueSeenBy = status.seenBy.filter((entry) => {
+      const seenUserId = entry.user?._id?.toString() || entry.user?.toString();
+      if (!seenUserId || seenUserIds.has(seenUserId)) return false;
+      seenUserIds.add(seenUserId);
+      return true;
+    });
+
     res.status(200).json({
       success: true,
       message: "Story fetched successfully",
-      status,
+      status: { ...status.toObject(), seenBy: uniqueSeenBy },
     });
   } catch (err) {
     res.status(500).json({
@@ -226,7 +234,6 @@ router.get("/feed", auth, async (req, res) => {
 
 //for userinfo
 router.get("/user/feed/:userId", auth, async (req, res) => {
-
   try {
     const { userId } = req.params;
 
@@ -323,18 +330,17 @@ router.post("/seen/:statusId", auth, async (req, res) => {
       return res.status(200).json({ success: true });
     }
 
-    const alreadySeen = status.seenBy.find(
-      (entry) => entry.user.toString() === user._id.toString(),
+    await Status.updateOne(
+      { _id: status._id, "seenBy.user": { $ne: user._id } },
+      {
+        $push: {
+          seenBy: {
+            user: user._id,
+            seenAt: new Date(),
+          },
+        },
+      },
     );
-
-    if (!alreadySeen) {
-      status.seenBy.push({
-        user: user._id,
-        seenAt: new Date(),
-      });
-
-      await status.save();
-    }
 
     res.status(200).json({
       success: true,

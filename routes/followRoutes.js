@@ -197,7 +197,7 @@ module.exports = (io) => {
     } catch (err) {
       res.status(500).json({ success: false, message: "Server error" });
     }
-  }); 
+  });
 
   router.get("/requests/:fromId/:toId", auth, async (req, res) => {
     try {
@@ -212,47 +212,47 @@ module.exports = (io) => {
   });
 
   router.post("/requests/batch-status", auth, async (req, res) => {
-  try {
-    const { toIds } = req.body;
- 
-    if (!Array.isArray(toIds) || toIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "toIds array is required",
+    try {
+      const { toIds } = req.body;
+
+      if (!Array.isArray(toIds) || toIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "toIds array is required",
+        });
+      }
+
+      const user = await User.findOne({ userId: req.user.id });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // ONE query covers every user card on the page, instead of one query
+      // per card via /requests/:fromId/:toId.
+      const requests = await FollowRequest.find({
+        from: user._id,
+        to: { $in: toIds },
+      }).select("to status isFriends");
+
+      const statusMap = {};
+      toIds.forEach((id) => {
+        statusMap[id] = { status: null, isFriends: false };
       });
+
+      requests.forEach((r) => {
+        statusMap[r.to.toString()] = {
+          status: r.status,
+          isFriends: r.isFriends,
+        };
+      });
+
+      res.json({ success: true, statuses: statusMap });
+    } catch (err) {
+      res.status(500).json({ success: false, message: "Server error" });
     }
- 
-    const user = await User.findOne({ userId: req.user.id });
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
- 
-    // ONE query covers every user card on the page, instead of one query
-    // per card via /requests/:fromId/:toId.
-    const requests = await FollowRequest.find({
-      from: user._id,
-      to: { $in: toIds },
-    }).select("to status isFriends");
- 
-    const statusMap = {};
-    toIds.forEach((id) => {
-      statusMap[id] = { status: null, isFriends: false };
-    });
- 
-    requests.forEach((r) => {
-      statusMap[r.to.toString()] = {
-        status: r.status,
-        isFriends: r.isFriends,
-      };
-    });
- 
-    res.json({ success: true, statuses: statusMap });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
+  });
 
   router.delete("/delete/requests/:fromId/:toId", auth, async (req, res) => {
     try {
@@ -555,17 +555,33 @@ module.exports = (io) => {
         status: "accepted",
       };
 
-      const totalCount = await FollowRequest.countDocuments(filter);
+      const [result] = await FollowRequest.aggregate([
+        { $match: filter },
+        { $sort: { createdAt: -1, _id: -1 } },
+        {
+          $group: {
+            _id: "$from",
+            request: { $first: "$$ROOT" },
+          },
+        },
+        { $replaceRoot: { newRoot: "$request" } },
+        { $sort: { createdAt: -1, _id: -1 } },
+        {
+          $facet: {
+            metadata: [{ $count: "totalCount" }],
+            followers: [{ $skip: skip }, { $limit: limit }],
+          },
+        },
+      ]);
 
-      const followers = await FollowRequest.find(filter)
-        .populate(
-          "from",
-          "userName email address profileImage isOnline isVerified",
-        )
-        .populate("to", "userName email address isOnline")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
+      const followers = await FollowRequest.populate(result.followers, [
+        {
+          path: "from",
+          select: "userName email address profileImage isOnline isVerified",
+        },
+        { path: "to", select: "userName email address isOnline" },
+      ]);
+      const totalCount = result.metadata[0]?.totalCount || 0;
 
       res.json({
         success: true,
@@ -688,20 +704,29 @@ module.exports = (io) => {
         .populate("to", "userName email address isOnline")
         .sort({ createdAt: -1 });
       const following = await FollowRequest.find({ from: user._id });
-      // --- counts ---
-      const totalFriends = friends.filter(
-        (f) => f.status === "accepted",
-      ).length;
-      const totalRequests = friends.filter(
-        (f) => f.status === "pending",
-      ).length;
-      const totalOnline = friends.filter(
-        (f) => f.status === "accepted" && f.from.isOnline === true,
-      ).length;
+      const acceptedFriends = friends.filter(
+        (request) => request.status === "accepted" && request.from?._id,
+      );
+      const pendingFriends = friends.filter(
+        (request) => request.status === "pending" && request.from?._id,
+      );
+      const totalFriends = new Set(
+        acceptedFriends.map((request) => request.from._id.toString()),
+      ).size;
+      const totalRequests = new Set(
+        pendingFriends.map((request) => request.from._id.toString()),
+      ).size;
+      const totalOnline = new Set(
+        acceptedFriends
+          .filter((request) => request.from.isOnline === true)
+          .map((request) => request.from._id.toString()),
+      ).size;
 
-      const totalFollowing = following.filter(
-        (f) => f.status === "accepted",
-      ).length;
+      const totalFollowing = new Set(
+        following
+          .filter((request) => request.status === "accepted")
+          .map((request) => request.to.toString()),
+      ).size;
 
       res.json({
         success: true,
